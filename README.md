@@ -1,28 +1,48 @@
-# PlayApp Movil Flutter
+# PlayApp-Movil-Flutter
 
-Aplicación móvil en **Flutter** desarrollada para **PlayApp** (migración de las funcionalidades principales de la aplicación web en Java).
+PlayApp Movil — Aplicación móvil en **Flutter** desarrollada a partir de la plataforma web **PlayApp** (Cartagena, Colombia).
 
-## Requisitos
+## Funcionalidades incluidas
 
-- Flutter SDK (`3.47.2` o compatible)
-- Dart SDK (`3.13.2` o compatible)
-- Android Studio / Xcode / VS Code según la plataforma objetivo
+- **Inicio:** Carrusel hero (*Hamburguesa de la casa*, *Mojarra*, *Bebidas*), bienvenida y enfoque anti-sobrecostos en playas de Cartagena, categorías populares (*Comida*, *Bebidas*, *Servicios*) y zonas de entrega en Bocagrande.
+- **Tienda:** Catálogo de productos y servicios costeros con búsqueda por texto, filtro por categoría, ordenamiento por nombre/precio, detalle de producto, selector de cantidad y validación de stock.
+- **Carrito, Envío y Pasarela de Pago:** Verificación de carrito, mapa interactivo de zonas de playa en Bocagrande / Cartagena (`Carpa / Mesa` y coordenadas), selección de método de pago (`Mercado Pago`, `DEBITO`, `CREDITO`, `EFECTIVO`), pasarela de pago y confirmación de pedido.
+- **Pedidos:** Historial con filtro por estado (`Recibido`, `En preparación`, `Terminado`), estado de pago y opción para completar pagos pendientes.
+- **Contacto y Reseñas:** Publicación de reseñas con estrellas (1–5) y formulario de contacto para Kiosco El Bony (`Cra. 1, Cartagena de Indias`).
+- **Asistente PlayApp (Chat flotante):** Botón flotante con consulta inteligente de precios oficiales, bebidas frías, recomendaciones y estado de pedidos.
+- **Autenticación y Panel Administrador:** Inicio de sesión y registro por rol (`Usuario` / `Administrador`), botones demo de acceso rápido y panel administrativo con métricas, gestión de órdenes, CRUD de catálogo y simulador de predicción de ventas.
 
-## Cómo ejecutar el proyecto
+## Credenciales demo incluidas
+
+- **Usuario:** `cliente@playapp.co` / `1234`
+- **Administrador:** `dondearri@gmail.com` / `1234`
+
+## Requisitos para ejecutar
+
+- Flutter SDK `3.47.2` o compatible
+- Dart SDK `3.13.2` o compatible
+
+## Cómo correr el proyecto
 
 ```bash
+git clone https://github.com/Crisho02/PlayApp-Movil-Flutter.git
+cd PlayApp-Movil-Flutter
 flutter pub get
 flutter run
 ```
 
-## Estructura inicial
+Para elegir dispositivo específico:
 
-- `lib/main.dart` — punto de entrada de la aplicación Flutter
-- `test/` — pruebas unitarias y de widgets
-- `android/`, `ios/`, `web/`, `windows/`, `macos/`, `linux/` — configuración por plataforma
+```bash
+flutter devices
+flutter run -d chrome      # En navegador Chrome
+flutter run -d windows     # App de escritorio Windows
+flutter run -d <android>   # Emulador o teléfono Android
+```
 
-## Flujo de colaboración (Git)
+## Pruebas y análisis estático
 
-1. Clonar el repositorio e instalar dependencias con `flutter pub get`.
-2. Crear una rama por funcionalidad (`git checkout -b feat/nombre-funcionalidad`).
-3. Ejecutar `dart analyze` y `flutter test` antes de abrir un Pull Request hacia `main`.
+```bash
+dart analyze
+flutter test
+```
