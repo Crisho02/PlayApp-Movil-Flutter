@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:dbcrypt/dbcrypt.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:mongo_dart/mongo_dart.dart' as mongo;
 import '../models/pedido.dart';
 import '../models/producto.dart';
@@ -25,18 +27,24 @@ class PlayAppDataGateway {
     this.mongoUri =
         'mongodb+srv://playapp_user:PlayAppadmin123@playapp-prod.0ibspwi.mongodb.net/playappdb?retryWrites=true&w=majority',
     this.databaseName = 'playappdb',
+    this.bridgeUrl = 'http://localhost:8081',
   });
 
   final String mongoUri;
   final String databaseName;
+  final String bridgeUrl;
 
   mongo.Db? _db;
   GatewayStatus _status = GatewayStatus.desconectado;
   String? _lastError;
+  bool _isBridgeConnected = false;
   final DBCrypt _dBCrypt = DBCrypt();
 
   GatewayStatus get status => _status;
-  bool get isConnected => _status == GatewayStatus.conectado && _db != null && _db!.isConnected;
+  bool get isConnected =>
+      _status == GatewayStatus.conectado &&
+      ((_db != null && _db!.isConnected) || (kIsWeb && _isBridgeConnected));
+  bool get isBridgeConnected => _isBridgeConnected;
   String? get lastError => _lastError;
 
   /// Abre la conexión hacia MongoDB Atlas.
@@ -47,10 +55,25 @@ class PlayAppDataGateway {
     _lastError = null;
 
     if (kIsWeb) {
+      try {
+        final res = await http
+            .get(Uri.parse('$bridgeUrl/api/status'))
+            .timeout(const Duration(milliseconds: 1500));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          if (data['status'] == 'conectado') {
+            _isBridgeConnected = true;
+            _status = GatewayStatus.conectado;
+            debugPrint('[PlayAppDataGateway] Conectado a MongoDB Atlas vía puente HTTP ($bridgeUrl)');
+            return true;
+          }
+        }
+      } catch (_) {}
+
+      _isBridgeConnected = false;
       _status = GatewayStatus.error;
       _lastError =
-          'Los navegadores web bloquean sockets TCP directos (puerto 27017) hacia MongoDB Atlas por seguridad del navegador. Ejecuta en Android o Windows para conexión directa nativa.';
-      debugPrint('[PlayAppDataGateway] $lastError');
+          'En navegador Web los sockets TCP directos están restringidos. Inicia el puente local ("dart run bin/mongo_bridge.dart") para sincronizar en vivo o ejecuta en Android/Windows.';
       return false;
     }
 
@@ -83,6 +106,21 @@ class PlayAppDataGateway {
     final stats = <String, int>{};
     if (!isConnected) return stats;
 
+    if (kIsWeb && _isBridgeConnected) {
+      try {
+        final res = await http
+            .get(Uri.parse('$bridgeUrl/api/stats'))
+            .timeout(const Duration(seconds: 3));
+        if (res.statusCode == 200) {
+          final map = jsonDecode(res.body) as Map<String, dynamic>;
+          return map.map((k, v) => MapEntry(k, (v as num).toInt()));
+        }
+      } catch (_) {}
+      return stats;
+    }
+
+    if (_db == null || !_db!.isConnected) return stats;
+
     final collections = [
       'productos',
       'entidades',
@@ -109,6 +147,23 @@ class PlayAppDataGateway {
 
   Future<List<Producto>> fetchProductos() async {
     if (!isConnected) return [];
+
+    if (kIsWeb && _isBridgeConnected) {
+      try {
+        final res = await http.get(Uri.parse('$bridgeUrl/api/productos'));
+        if (res.statusCode == 200) {
+          final list = jsonDecode(res.body) as List<dynamic>;
+          return list
+              .map((d) => Producto.fromMongo(Map<String, dynamic>.from(d as Map)))
+              .toList();
+        }
+      } catch (e) {
+        debugPrint('[PlayAppDataGateway] Error al leer productos por puente: $e');
+      }
+      return [];
+    }
+
+    if (_db == null || !_db!.isConnected) return [];
     try {
       final docs = await _db!
           .collection('productos')
@@ -192,6 +247,31 @@ class PlayAppDataGateway {
   /// Autentica contra la colección `entidades` usando hash BCrypt (idéntico a Spring Security).
   Future<Usuario?> login(String correo, String password, RolUsuario rolEsperado) async {
     if (!isConnected) return null;
+
+    if (kIsWeb && _isBridgeConnected) {
+      try {
+        final res = await http.post(
+          Uri.parse('$bridgeUrl/api/login'),
+          headers: {'Content-Type': 'application/json; charset=utf-8'},
+          body: jsonEncode({'email': correo, 'password': password}),
+        );
+        if (res.statusCode == 200) {
+          final body = jsonDecode(res.body) as Map<String, dynamic>;
+          final userMap = Map<String, dynamic>.from(body['usuario'] as Map);
+          final user = Usuario.fromMongo(userMap);
+          if (rolEsperado == RolUsuario.admin && user.rol != RolUsuario.admin) {
+            return null;
+          }
+          return user;
+        }
+        return null;
+      } catch (e) {
+        debugPrint('[PlayAppDataGateway] Error al autenticar por puente: $e');
+        return null;
+      }
+    }
+
+    if (_db == null || !_db!.isConnected) return null;
     try {
       final normEmail = correo.trim().toLowerCase();
       final doc = await _db!.collection('entidades').findOne(
@@ -269,6 +349,23 @@ class PlayAppDataGateway {
 
   Future<List<Pedido>> fetchPedidos() async {
     if (!isConnected) return [];
+
+    if (kIsWeb && _isBridgeConnected) {
+      try {
+        final res = await http.get(Uri.parse('$bridgeUrl/api/pedidos'));
+        if (res.statusCode == 200) {
+          final list = jsonDecode(res.body) as List<dynamic>;
+          return list
+              .map((d) => Pedido.fromMongo(Map<String, dynamic>.from(d as Map)))
+              .toList();
+        }
+      } catch (e) {
+        debugPrint('[PlayAppDataGateway] Error al consultar pedidos por puente: $e');
+      }
+      return [];
+    }
+
+    if (_db == null || !_db!.isConnected) return [];
     try {
       final docs = await _db!
           .collection('pedidos')
@@ -283,6 +380,22 @@ class PlayAppDataGateway {
 
   Future<bool> savePedido(Pedido pedido) async {
     if (!isConnected) return false;
+
+    if (kIsWeb && _isBridgeConnected) {
+      try {
+        final res = await http.post(
+          Uri.parse('$bridgeUrl/api/pedidos'),
+          headers: {'Content-Type': 'application/json; charset=utf-8'},
+          body: jsonEncode(pedido.toMongo()),
+        );
+        return res.statusCode == 201;
+      } catch (e) {
+        debugPrint('[PlayAppDataGateway] Error al guardar pedido por puente: $e');
+        return false;
+      }
+    }
+
+    if (_db == null || !_db!.isConnected) return false;
     try {
       final col = _db!.collection('pedidos');
       final data = pedido.toMongo();
@@ -358,6 +471,23 @@ class PlayAppDataGateway {
 
   Future<List<Resena>> fetchResenas() async {
     if (!isConnected) return [];
+
+    if (kIsWeb && _isBridgeConnected) {
+      try {
+        final res = await http.get(Uri.parse('$bridgeUrl/api/resenas'));
+        if (res.statusCode == 200) {
+          final list = jsonDecode(res.body) as List<dynamic>;
+          return list
+              .map((d) => Resena.fromMongo(Map<String, dynamic>.from(d as Map)))
+              .toList();
+        }
+      } catch (e) {
+        debugPrint('[PlayAppDataGateway] Error al consultar reseñas por puente: $e');
+      }
+      return [];
+    }
+
+    if (_db == null || !_db!.isConnected) return [];
     try {
       final docs = await _db!
           .collection('reseñas')
@@ -372,6 +502,22 @@ class PlayAppDataGateway {
 
   Future<bool> saveResena(Resena resena) async {
     if (!isConnected) return false;
+
+    if (kIsWeb && _isBridgeConnected) {
+      try {
+        final res = await http.post(
+          Uri.parse('$bridgeUrl/api/resenas'),
+          headers: {'Content-Type': 'application/json; charset=utf-8'},
+          body: jsonEncode(resena.toMongo()),
+        );
+        return res.statusCode == 201;
+      } catch (e) {
+        debugPrint('[PlayAppDataGateway] Error al guardar reseña por puente: $e');
+        return false;
+      }
+    }
+
+    if (_db == null || !_db!.isConnected) return false;
     try {
       final data = resena.toMongo();
       final res = await _db!.collection('reseñas').insertOne(data);
