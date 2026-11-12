@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import '../services/data_gateway.dart';
 import '../state/playapp_state.dart';
 import '../theme/playapp_theme.dart';
 import '../widgets/chat_widget_overlay.dart';
+import '../widgets/data_gateway_sheet.dart';
 import 'admin_screen.dart';
 import 'auth_screen.dart';
 import 'cart_screen.dart';
@@ -20,6 +22,15 @@ class MainShell extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const PlayAppChatSheet(),
+    );
+  }
+
+  void _openDataGateway(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const DataGatewaySheet(),
     );
   }
 
@@ -98,6 +109,33 @@ class MainShell extends StatelessWidget {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Pasarela de Datos · MongoDB Atlas',
+            onPressed: () => _openDataGateway(context),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.storage_outlined, size: 22),
+                Positioned(
+                  right: -1,
+                  bottom: -1,
+                  child: Container(
+                    width: 9,
+                    height: 9,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: state.isDatabaseConnected
+                          ? PlayAppColors.successGreen
+                          : (state.gatewayStatus == GatewayStatus.conectando
+                              ? PlayAppColors.warningAmber
+                              : Colors.grey),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: IconButton(

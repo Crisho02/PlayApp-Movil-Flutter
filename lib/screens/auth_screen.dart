@@ -16,6 +16,7 @@ class _AuthScreenState extends State<AuthScreen>
   late final TabController _tabController;
   RolUsuario _selectedRole = RolUsuario.user;
   bool _obscurePassword = true;
+  bool _isLoading = false;
   String? _errorMsg;
 
   final _emailCtrl = TextEditingController();
@@ -37,31 +38,49 @@ class _AuthScreenState extends State<AuthScreen>
     super.dispose();
   }
 
-  void _submitLogin(PlayAppState state) {
-    final err = state.login(
+  Future<void> _submitLogin(PlayAppState state) async {
+    setState(() {
+      _isLoading = true;
+      _errorMsg = null;
+    });
+
+    final err = await state.loginAsync(
       correo: _emailCtrl.text,
       password: _passwordCtrl.text,
       rolEsperado: _selectedRole,
     );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
     if (err != null) {
       setState(() => _errorMsg = err);
       return;
     }
-    if (mounted) Navigator.of(context).pop();
+    Navigator.of(context).pop();
   }
 
-  void _submitRegister(PlayAppState state) {
+  Future<void> _submitRegister(PlayAppState state) async {
+    setState(() {
+      _isLoading = true;
+      _errorMsg = null;
+    });
+
     final err = state.register(
       nombreCompleto: _nameCtrl.text,
       correo: _emailCtrl.text,
       password: _passwordCtrl.text,
       rol: _selectedRole,
     );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
     if (err != null) {
       setState(() => _errorMsg = err);
       return;
     }
-    if (mounted) Navigator.of(context).pop();
+    Navigator.of(context).pop();
   }
 
   @override
@@ -211,14 +230,25 @@ class _AuthScreenState extends State<AuthScreen>
                                     SizedBox(
                                       width: double.infinity,
                                       child: ElevatedButton(
-                                        onPressed: () => isRegister
-                                            ? _submitRegister(state)
-                                            : _submitLogin(state),
-                                        child: Text(
-                                          isRegister
-                                              ? 'Registrarse'
-                                              : 'Ingresar',
-                                        ),
+                                        onPressed: _isLoading
+                                            ? null
+                                            : () => isRegister
+                                                ? _submitRegister(state)
+                                                : _submitLogin(state),
+                                        child: _isLoading
+                                            ? const SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Colors.white,
+                                                ),
+                                              )
+                                            : Text(
+                                                isRegister
+                                                    ? 'Registrarse'
+                                                    : 'Ingresar',
+                                              ),
                                       ),
                                     ),
                                   ],

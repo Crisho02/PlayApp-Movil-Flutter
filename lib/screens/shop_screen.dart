@@ -229,13 +229,8 @@ class _ShopScreenState extends State<ShopScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.asset(
-                    producto.imagenAsset,
+                  producto.buildImageWidget(
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Image.asset(
-                      'assets/images/blank-product.jpg',
-                      fit: BoxFit.cover,
-                    ),
                   ),
                   Positioned(
                     top: 10,
@@ -362,11 +357,12 @@ class _ShopScreenState extends State<ShopScreen> {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
-                child: Image.asset(
-                  producto.imagenAsset,
+                child: SizedBox(
                   height: 190,
                   width: double.infinity,
-                  fit: BoxFit.cover,
+                  child: producto.buildImageWidget(
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
               const SizedBox(height: 14),

@@ -18,6 +18,7 @@ class _AdminScreenState extends State<AdminScreen>
   late final TabController _tabController;
 
   String _diaSemana = 'Sabado';
+  String _predProducto = 'Pescado frito';
   CategoriaProducto _predCategoria = CategoriaProducto.comida;
   String _clima = 'Soleado';
   String _temporada = 'Alta';
@@ -75,9 +76,61 @@ class _AdminScreenState extends State<AdminScreen>
   }
 
   Widget _buildDashboardTab(PlayAppState state) {
+    // Conteos por estado
+    final recibidos = state.pedidos.where((p) => p.estado == EstadoPedido.recibido).length;
+    final preparando = state.pedidos.where((p) => p.estado == EstadoPedido.enPreparacion).length;
+    final terminados = state.pedidos.where((p) => p.estado == EstadoPedido.terminado).length;
+
+    // Conteos por método de pago
+    final porMetodo = <String, int>{};
+    for (final p in state.pedidos) {
+      porMetodo[p.pago.metodo] = (porMetodo[p.pago.metodo] ?? 0) + 1;
+    }
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 90),
       children: [
+        // Banner Pasarela de Datos MongoDB
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: state.isDatabaseConnected
+                ? PlayAppColors.successGreen.withValues(alpha: 0.12)
+                : const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: state.isDatabaseConnected
+                  ? PlayAppColors.successGreen.withValues(alpha: 0.4)
+                  : const Color(0xFFD1D5DB),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                state.isDatabaseConnected ? Icons.cloud_done : Icons.cloud_off,
+                size: 20,
+                color: state.isDatabaseConnected
+                    ? PlayAppColors.successGreen
+                    : PlayAppColors.mutedText,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  state.isDatabaseConnected
+                      ? 'Conectado a MongoDB Atlas (playappdb)'
+                      : 'Modo Offline (persistencia local)',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+                ),
+              ),
+              TextButton(
+                onPressed: state.isSyncing ? null : () => state.sincronizarConBaseDeDatos(),
+                child: Text(state.isSyncing ? 'Sincronizando...' : 'Sincronizar'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -124,7 +177,142 @@ class _AdminScreenState extends State<AdminScreen>
             ),
           ],
         ),
+
+        const SizedBox(height: 16),
+        // Pedidos por Estado
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Pedidos por Estado',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    _buildStatusPill('Recibidos', '$recibidos', PlayAppColors.primaryBlue),
+                    const SizedBox(width: 8),
+                    _buildStatusPill('En Preparación', '$preparando', PlayAppColors.warningAmber),
+                    const SizedBox(width: 8),
+                    _buildStatusPill('Terminados', '$terminados', PlayAppColors.successGreen),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 12),
+        // Métodos de Pago
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Métodos de Pago',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: porMetodo.entries.map((entry) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${entry.key}: ${entry.value} pedidos',
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 12),
+        // Productos por Categoría
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Productos por Categoría',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+                const SizedBox(height: 10),
+                ...CategoriaProducto.values.map((cat) {
+                  final prodsCat = state.productos.where((p) => p.categoria == cat).toList();
+                  final stockCat = prodsCat.fold(0, (s, p) => s + p.stock);
+                  final valCat = prodsCat.fold(0.0, (s, p) => s + (p.precio * p.stock));
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          cat.etiqueta,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          '${prodsCat.length} prods · $stockCat unid. · ${formatCop(valCat)}',
+                          style: const TextStyle(fontSize: 12.5, color: PlayAppColors.mutedText),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _buildStatusPill(String title, String count, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              count,
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+                color: color,
+              ),
+            ),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -228,11 +416,12 @@ class _AdminScreenState extends State<AdminScreen>
             child: ListTile(
               leading: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.asset(
-                  p.imagenAsset,
+                child: SizedBox(
                   width: 48,
                   height: 48,
-                  fit: BoxFit.cover,
+                  child: p.buildImageWidget(
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
               title: Text(
@@ -293,6 +482,37 @@ class _AdminScreenState extends State<AdminScreen>
           },
         ),
         const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          initialValue: _predProducto,
+          decoration: const InputDecoration(labelText: 'Producto'),
+          items: const [
+            'Cerveza Club Colombia',
+            'Ceviche de camaron',
+            'Clase de surf',
+            'Alquiler de moto acuática',
+            'Coco frio',
+            'Coctel de maracuya',
+            'Pescado frito',
+            'Ostras frescas',
+            'Limonada de coco',
+            'Tinto frio',
+          ].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+          onChanged: (v) {
+            if (v != null) {
+              setState(() {
+                _predProducto = v;
+                if (v.contains('Cerveza') || v.contains('Coco') || v.contains('Coctel') || v.contains('Limonada') || v.contains('Tinto')) {
+                  _predCategoria = CategoriaProducto.bebida;
+                } else if (v.contains('surf') || v.contains('moto')) {
+                  _predCategoria = CategoriaProducto.servicio;
+                } else {
+                  _predCategoria = CategoriaProducto.comida;
+                }
+              });
+            }
+          },
+        ),
+        const SizedBox(height: 10),
         DropdownButtonFormField<CategoriaProducto>(
           initialValue: _predCategoria,
           decoration: const InputDecoration(labelText: 'Categoría'),
@@ -341,6 +561,7 @@ class _AdminScreenState extends State<AdminScreen>
               precio: precio,
               clima: _clima,
               temporada: _temporada,
+              productoNombre: _predProducto,
             );
             setState(() => _resultadoPrediccion = res);
           },

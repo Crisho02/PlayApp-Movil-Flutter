@@ -14,4 +14,18 @@ class ChatMessage {
   final ChatSender sender;
   final String text;
   final DateTime timestamp;
+
+  ChatMessage copyWith({
+    String? id,
+    ChatSender? sender,
+    String? text,
+    DateTime? timestamp,
+  }) {
+    return ChatMessage(
+      id: id ?? this.id,
+      sender: sender ?? this.sender,
+      text: text ?? this.text,
+      timestamp: timestamp ?? this.timestamp,
+    );
+  }
 }

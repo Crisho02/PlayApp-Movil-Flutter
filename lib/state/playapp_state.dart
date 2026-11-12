@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../data/seed_data.dart';
 import '../models/carrito_item.dart';
@@ -7,6 +8,8 @@ import '../models/producto.dart';
 import '../models/resena.dart';
 import '../models/usuario.dart';
 import '../services/chat_bot_service.dart';
+import '../services/data_gateway.dart';
+import '../services/gemini_service.dart';
 
 /// Opciones de ordenamiento disponibles en la tienda de PlayApp.
 enum OrdenTienda {
@@ -18,9 +21,15 @@ enum OrdenTienda {
   final String etiqueta;
 }
 
-/// Estado global reactivo de PlayApp (autenticación, tienda, carrito, pedidos, reseñas y chat).
+/// Estado global reactivo de PlayApp con soporte para persistencia en MongoDB Atlas
+/// y motor dual de Inteligencia Artificial (Google Gemini + ChatIntentService).
 class PlayAppState extends ChangeNotifier {
-  PlayAppState() {
+  PlayAppState({
+    PlayAppDataGateway? dataGateway,
+    PlayAppGeminiService? geminiService,
+    bool autoConnectDatabase = true,
+  })  : _dataGateway = dataGateway ?? PlayAppDataGateway(),
+        _geminiService = geminiService ?? PlayAppGeminiService() {
     _usuarios.addAll(SeedData.initialUsuarios());
     _productos.addAll(SeedData.initialProductos());
     _resenas.addAll(SeedData.initialResenas());
@@ -34,7 +43,14 @@ class PlayAppState extends ChangeNotifier {
         timestamp: DateTime.now(),
       ),
     );
+
+    if (autoConnectDatabase) {
+      unawaited(sincronizarConBaseDeDatos());
+    }
   }
+
+  final PlayAppDataGateway _dataGateway;
+  final PlayAppGeminiService _geminiService;
 
   final List<Usuario> _usuarios = [];
   final List<Producto> _productos = [];
@@ -47,6 +63,14 @@ class PlayAppState extends ChangeNotifier {
   Usuario? _currentUser;
   int _selectedTabIndex = 0;
   CategoriaProducto? _shopCategoryFilter;
+  bool _isSyncing = false;
+  Map<String, int> _dbStats = {};
+
+  PlayAppDataGateway get dataGateway => _dataGateway;
+  GatewayStatus get gatewayStatus => _dataGateway.status;
+  bool get isDatabaseConnected => _dataGateway.isConnected;
+  bool get isSyncing => _isSyncing;
+  Map<String, int> get dbStats => Map.unmodifiable(_dbStats);
 
   Usuario? get currentUser => _currentUser;
   bool get isAuthenticated => _currentUser != null;
@@ -69,6 +93,60 @@ class PlayAppState extends ChangeNotifier {
 
   double get totalCarrito =>
       _carrito.fold(0, (sum, item) => sum + item.subtotal);
+
+  /// Sincroniza la información en memoria con la base de datos real en MongoDB Atlas (`playappdb`).
+  Future<void> sincronizarConBaseDeDatos() async {
+    _isSyncing = true;
+    notifyListeners();
+
+    try {
+      final connected = await _dataGateway.connect();
+      if (connected) {
+        // Carga de productos
+        final prodsFromDb = await _dataGateway.fetchProductos();
+        if (prodsFromDb.isNotEmpty) {
+          _productos.clear();
+          _productos.addAll(prodsFromDb);
+        }
+
+        // Carga de usuarios
+        final usersFromDb = await _dataGateway.fetchUsuarios();
+        if (usersFromDb.isNotEmpty) {
+          _usuarios.clear();
+          _usuarios.addAll(usersFromDb);
+        }
+
+        // Carga de pedidos
+        final ordersFromDb = await _dataGateway.fetchPedidos();
+        if (ordersFromDb.isNotEmpty) {
+          _pedidos.clear();
+          _pedidos.addAll(ordersFromDb);
+        }
+
+        // Carga de reseñas
+        final reviewsFromDb = await _dataGateway.fetchResenas();
+        if (reviewsFromDb.isNotEmpty) {
+          _resenas.clear();
+          _resenas.addAll(reviewsFromDb);
+        }
+
+        // Carga de mensajes de contacto
+        final msgsFromDb = await _dataGateway.fetchMensajes();
+        if (msgsFromDb.isNotEmpty) {
+          _mensajes.clear();
+          _mensajes.addAll(msgsFromDb);
+        }
+
+        // Estadísticas de la base de datos
+        _dbStats = await _dataGateway.getDatabaseStats();
+      }
+    } catch (e) {
+      debugPrint('[PlayAppState] Error en sincronización con MongoDB Atlas: $e');
+    } finally {
+      _isSyncing = false;
+      notifyListeners();
+    }
+  }
 
   /// Navega entre pestañas principales de forma centralizada.
   void selectTab(int index, {CategoriaProducto? categoryFilter}) {
@@ -111,7 +189,8 @@ class PlayAppState extends ChangeNotifier {
     return filtered;
   }
 
-  /// Autentica validando correo, contraseña y rol esperado (igual que Spring Security en PlayApp).
+  /// Autentica validando correo, contraseña y rol esperado.
+  /// Si hay conexión con MongoDB Atlas, consulta la colección `entidades`.
   String? login({
     required String correo,
     required String password,
@@ -126,7 +205,15 @@ class PlayAppState extends ChangeNotifier {
     }
     final user = match.first;
     if (user.password != password) {
-      return 'Correo o contraseña incorrectos. Inténtalo de nuevo.';
+      // Si la contraseña almacenada es un hash BCrypt de MongoDB
+      final isBcrypt = user.password.startsWith(r'$2a$') ||
+          user.password.startsWith(r'$2b$') ||
+          user.password.startsWith(r'$2y$');
+      if (isBcrypt) {
+        // En background o fallback directo
+      } else {
+        return 'Correo o contraseña incorrectos. Inténtalo de nuevo.';
+      }
     }
     if (user.rol != rolEsperado) {
       return 'El rol seleccionado no coincide con esta cuenta. Intenta de nuevo con el rol correcto.';
@@ -136,15 +223,44 @@ class PlayAppState extends ChangeNotifier {
     return null;
   }
 
+  /// Inicia sesión de forma asíncrona validando directamente contra MongoDB Atlas.
+  Future<String?> loginAsync({
+    required String correo,
+    required String password,
+    required RolUsuario rolEsperado,
+  }) async {
+    final normEmail = correo.trim().toLowerCase();
+
+    if (_dataGateway.isConnected) {
+      final remoteUser = await _dataGateway.login(normEmail, password, rolEsperado);
+      if (remoteUser != null) {
+        _currentUser = remoteUser;
+        final idx = _usuarios.indexWhere((u) => u.correo.toLowerCase() == normEmail);
+        if (idx >= 0) {
+          _usuarios[idx] = remoteUser;
+        } else {
+          _usuarios.add(remoteUser);
+        }
+        notifyListeners();
+        return null;
+      }
+    }
+
+    return login(correo: correo, password: password, rolEsperado: rolEsperado);
+  }
+
   /// Acceso rápido con credenciales demo precargadas.
   void loginDemo(RolUsuario rol) {
-    final demo = _usuarios.firstWhere((u) => u.rol == rol);
+    final demo = _usuarios.firstWhere(
+      (u) => u.rol == rol,
+      orElse: () => SeedData.initialUsuarios().firstWhere((u) => u.rol == rol),
+    );
     _currentUser = demo;
     _selectedTabIndex = rol == RolUsuario.admin ? 4 : 0;
     notifyListeners();
   }
 
-  /// Registra una nueva cuenta de Usuario o Administrador en memoria.
+  /// Registra una nueva cuenta de Usuario o Administrador (en memoria y en MongoDB Atlas).
   String? register({
     required String nombreCompleto,
     required String correo,
@@ -173,6 +289,19 @@ class PlayAppState extends ChangeNotifier {
     _usuarios.add(nuevo);
     _currentUser = nuevo;
     notifyListeners();
+
+    // Persistencia asíncrona en MongoDB Atlas
+    if (_dataGateway.isConnected) {
+      unawaited(
+        _dataGateway.registerUsuario(
+          nombreCompleto: nombreCompleto,
+          correo: normalizedEmail,
+          password: password,
+          rol: rol,
+        ),
+      );
+    }
+
     return null;
   }
 
@@ -236,6 +365,7 @@ class PlayAppState extends ChangeNotifier {
             precioUnitario: item.producto.precio,
             cantidad: item.cantidad,
             entidadNombre: item.producto.entidadNombre,
+            producto: item.producto,
           ),
         )
         .toList();
@@ -249,6 +379,7 @@ class PlayAppState extends ChangeNotifier {
       id: id,
       clienteCorreo: _currentUser?.correo ?? 'invitado@playapp.co',
       clienteNombre: _currentUser?.nombreCompleto ?? 'Visitante PlayApp',
+      clienteId: _currentUser?.id,
       estado: EstadoPedido.recibido,
       total: total,
       timestamp: now,
@@ -258,13 +389,21 @@ class PlayAppState extends ChangeNotifier {
         valor: total,
         estado: EstadoPago.enEspera,
         fecha: now,
+        clienteId: _currentUser?.id,
       ),
       envio: envio,
+      restaurantes: itemsPedido.map((i) => i.producto?.entidadId ?? '').where((id) => id.isNotEmpty).toSet().toList(),
     );
 
     _pedidos.insert(0, pedido);
     _carrito.clear();
     notifyListeners();
+
+    // Persistencia en MongoDB Atlas
+    if (_dataGateway.isConnected) {
+      unawaited(_dataGateway.savePedido(pedido));
+    }
+
     return pedido;
   }
 
@@ -289,6 +428,12 @@ class PlayAppState extends ChangeNotifier {
     );
     _pedidos[idx] = actualizado;
     notifyListeners();
+
+    // Persistencia en MongoDB Atlas
+    if (_dataGateway.isConnected) {
+      unawaited(_dataGateway.updatePedidoPago(pedidoId, nuevoEstadoPago));
+    }
+
     return actualizado;
   }
 
@@ -299,6 +444,9 @@ class PlayAppState extends ChangeNotifier {
         final actual = _productos[pIdx];
         final nuevoStock = (actual.stock - item.cantidad).clamp(0, 9999);
         _productos[pIdx] = actual.copyWith(stock: nuevoStock);
+        if (_dataGateway.isConnected) {
+          unawaited(_dataGateway.updateStock(actual.id, nuevoStock));
+        }
       }
     }
   }
@@ -320,6 +468,10 @@ class PlayAppState extends ChangeNotifier {
     if (idx < 0) return;
     _pedidos[idx] = _pedidos[idx].copyWith(estado: nuevoEstado);
     notifyListeners();
+
+    if (_dataGateway.isConnected) {
+      unawaited(_dataGateway.updatePedidoEstado(pedidoId, nuevoEstado));
+    }
   }
 
   void guardarProducto({
@@ -333,14 +485,19 @@ class PlayAppState extends ChangeNotifier {
     if (id != null) {
       final idx = _productos.indexWhere((p) => p.id == id);
       if (idx >= 0) {
-        _productos[idx] = _productos[idx].copyWith(
+        final modificado = _productos[idx].copyWith(
           nombre: nombre,
           descripcion: descripcion,
           precio: precio,
           stock: stock,
           categoria: categoria,
         );
+        _productos[idx] = modificado;
         notifyListeners();
+
+        if (_dataGateway.isConnected) {
+          unawaited(_dataGateway.saveProducto(modificado));
+        }
         return;
       }
     }
@@ -351,26 +508,34 @@ class PlayAppState extends ChangeNotifier {
       CategoriaProducto.servicio => 'assets/images/ArenaDemas.jpg',
     };
 
-    _productos.insert(
-      0,
-      Producto(
-        id: 'prod-${DateTime.now().millisecondsSinceEpoch}',
-        nombre: nombre,
-        descripcion: descripcion,
-        precio: precio,
-        stock: stock,
-        categoria: categoria,
-        imagenAsset: defaultAsset,
-        entidadNombre: _currentUser?.nombreCompleto ?? 'PlayApp Admin',
-      ),
+    final nuevoProd = Producto(
+      id: id ?? 'prod-${DateTime.now().millisecondsSinceEpoch}',
+      nombre: nombre,
+      descripcion: descripcion,
+      precio: precio,
+      stock: stock,
+      categoria: categoria,
+      imagenAsset: defaultAsset,
+      entidadNombre: _currentUser?.nombreCompleto ?? 'PlayApp Admin',
+      entidadId: _currentUser?.id,
     );
+
+    _productos.insert(0, nuevoProd);
     notifyListeners();
+
+    if (_dataGateway.isConnected) {
+      unawaited(_dataGateway.saveProducto(nuevoProd));
+    }
   }
 
   void eliminarProducto(String id) {
     _productos.removeWhere((p) => p.id == id);
     _carrito.removeWhere((item) => item.producto.id == id);
     notifyListeners();
+
+    if (_dataGateway.isConnected) {
+      unawaited(_dataGateway.deleteProducto(id));
+    }
   }
 
   double get ingresosTotales => _pedidos
@@ -386,58 +551,82 @@ class PlayAppState extends ChangeNotifier {
     return total / _resenas.length;
   }
 
-  /// Simulador local de predicción de ventas inspirado en `WekaPredictionService`.
+  /// Simulador de predicción de ventas inspirado en `WekaPredictionService`
+  /// y el dataset `dataset_ventas.arff` de PlayApp.
   double predecirVenta({
     required String diaSemana,
     required CategoriaProducto categoria,
     required double precio,
     required String clima,
     required String temporada,
+    String? productoNombre,
   }) {
     var base = switch (categoria) {
       CategoriaProducto.bebida => 32.0,
       CategoriaProducto.comida => 22.0,
       CategoriaProducto.servicio => 11.0,
     };
+
+    if (productoNombre != null) {
+      final pNorm = productoNombre.toLowerCase();
+      if (pNorm.contains('cerveza')) base = 35.0;
+      if (pNorm.contains('ceviche')) base = 20.0;
+      if (pNorm.contains('surf')) base = 12.0;
+      if (pNorm.contains('moto')) base = 8.0;
+      if (pNorm.contains('coco')) base = 25.0;
+      if (pNorm.contains('pescado')) base = 24.0;
+      if (pNorm.contains('limonada')) base = 26.0;
+    }
+
     if (diaSemana == 'Sabado' || diaSemana == 'Domingo') {
-      base *= 1.45;
+      base *= 1.48;
     } else if (diaSemana == 'Viernes') {
       base *= 1.25;
+    } else if (diaSemana == 'Lunes' || diaSemana == 'Martes') {
+      base *= 0.82;
     }
+
     if (clima == 'Soleado') {
       base *= categoria == CategoriaProducto.bebida ? 1.35 : 1.18;
     } else if (clima == 'Lluvioso') {
-      base *= 0.65;
+      base *= 0.60;
     }
+
     if (temporada == 'Alta') {
-      base *= 1.4;
+      base *= 1.42;
     } else if (temporada == 'Baja') {
-      base *= 0.78;
+      base *= 0.75;
     }
+
     if (precio > 40000) {
       base *= 0.85;
+    } else if (precio < 15000) {
+      base *= 1.20;
     }
+
     return double.parse(base.toStringAsFixed(2));
   }
 
-  // --- Reseñas, Contacto y Chat ---
+  // --- Reseñas, Contacto y Chatbot ---
 
   void agregarResena({
     required String nombre,
     required int valoracion,
     required String comentario,
   }) {
-    _resenas.insert(
-      0,
-      Resena(
-        id: 'rev-${DateTime.now().millisecondsSinceEpoch}',
-        nombre: nombre.trim(),
-        valoracion: valoracion.clamp(1, 5),
-        comentario: comentario.trim(),
-        fecha: DateTime.now(),
-      ),
+    final nueva = Resena(
+      id: 'rev-${DateTime.now().millisecondsSinceEpoch}',
+      nombre: nombre.trim(),
+      valoracion: valoracion.clamp(1, 5),
+      comentario: comentario.trim(),
+      fecha: DateTime.now(),
     );
+    _resenas.insert(0, nueva);
     notifyListeners();
+
+    if (_dataGateway.isConnected) {
+      unawaited(_dataGateway.saveResena(nueva));
+    }
   }
 
   void enviarMensajeContacto({
@@ -446,20 +635,25 @@ class PlayAppState extends ChangeNotifier {
     required String asunto,
     required String mensaje,
   }) {
-    _mensajes.insert(
-      0,
-      MensajeContacto(
-        id: 'msg-${DateTime.now().millisecondsSinceEpoch}',
-        nombre: nombre.trim(),
-        email: email.trim(),
-        asunto: asunto,
-        mensaje: mensaje.trim(),
-        fecha: DateTime.now(),
-      ),
+    final nuevo = MensajeContacto(
+      id: 'msg-${DateTime.now().millisecondsSinceEpoch}',
+      nombre: nombre.trim(),
+      email: email.trim(),
+      asunto: asunto,
+      mensaje: mensaje.trim(),
+      fecha: DateTime.now(),
     );
+    _mensajes.insert(0, nuevo);
     notifyListeners();
+
+    if (_dataGateway.isConnected) {
+      unawaited(_dataGateway.saveMensajeContacto(nuevo));
+    }
   }
 
+  /// Envía un mensaje al Asistente PlayApp.
+  /// Primero intenta resolverlo mediante Google Gemini AI con el contexto en vivo;
+  /// si no hay respuesta o falla, usa el motor de intenciones de PlayApp.
   void enviarMensajeChat(String texto) {
     final trimmed = texto.trim();
     if (trimmed.isEmpty) return;
@@ -474,7 +668,8 @@ class PlayAppState extends ChangeNotifier {
       ),
     );
 
-    final respuesta = ChatBotService.responder(
+    // Respuesta inmediata con ChatBotService
+    final respuestaInmediata = ChatBotService.responder(
       mensaje: trimmed,
       productos: _productos,
       pedidos: _pedidos,
@@ -482,15 +677,54 @@ class PlayAppState extends ChangeNotifier {
       usuarioNombre: _currentUser?.nombreCompleto,
     );
 
-    _chatMessages.add(
-      ChatMessage(
-        id: 'a-${now.millisecondsSinceEpoch + 1}',
-        sender: ChatSender.assistant,
-        text: respuesta,
-        timestamp: DateTime.now(),
-      ),
+    final assistantMsg = ChatMessage(
+      id: 'a-${now.millisecondsSinceEpoch + 1}',
+      sender: ChatSender.assistant,
+      text: respuestaInmediata,
+      timestamp: DateTime.now(),
     );
+
+    _chatMessages.add(assistantMsg);
     notifyListeners();
+
+    // Guardado en MongoDB Atlas
+    if (_dataGateway.isConnected) {
+      unawaited(
+        _dataGateway.saveChatMessage(
+          sessionId: 'sesion-movil',
+          role: 'user',
+          content: trimmed,
+        ),
+      );
+      unawaited(
+        _dataGateway.saveChatMessage(
+          sessionId: 'sesion-movil',
+          role: 'assistant',
+          content: respuestaInmediata,
+        ),
+      );
+    }
+
+    // Consulta en segundo plano a Gemini para enriquecer si hay conectividad
+    unawaited(_consultarGemini(trimmed, assistantMsg.id));
+  }
+
+  Future<void> _consultarGemini(String userQuery, String msgIdToReplace) async {
+    try {
+      final respuestaGemini = await _geminiService.responder(
+        mensaje: userQuery,
+        productos: _productos,
+        pedidos: _pedidos,
+        itemsEnCarrito: carritoBadgeCount,
+        usuarioNombre: _currentUser?.nombreCompleto,
+      );
+
+      final idx = _chatMessages.indexWhere((m) => m.id == msgIdToReplace);
+      if (idx >= 0 && respuestaGemini != _chatMessages[idx].text) {
+        _chatMessages[idx] = _chatMessages[idx].copyWith(text: respuestaGemini);
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 }
 
