@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/data_gateway.dart';
 import '../state/playapp_state.dart';
@@ -138,6 +139,31 @@ class DataGatewaySheet extends StatelessWidget {
               ],
             ),
           ),
+
+          if (kIsWeb) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFF59E0B)),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline, size: 20, color: Color(0xFFB45309)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Estás ejecutando en Flutter Web (Chrome). Por seguridad, los navegadores no permiten abrir sockets TCP directos (puerto 27017) hacia MongoDB Atlas. Para conectar con la base de datos real en vivo, ejecuta en Android o en Windows Desktop (`flutter run -d windows`).',
+                      style: TextStyle(fontSize: 11.5, color: Color(0xFF92400E)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           const SizedBox(height: 14),
 

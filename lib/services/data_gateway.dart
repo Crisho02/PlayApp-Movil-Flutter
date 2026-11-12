@@ -46,6 +46,14 @@ class PlayAppDataGateway {
     _status = GatewayStatus.conectando;
     _lastError = null;
 
+    if (kIsWeb) {
+      _status = GatewayStatus.error;
+      _lastError =
+          'Los navegadores web bloquean sockets TCP directos (puerto 27017) hacia MongoDB Atlas por seguridad del navegador. Ejecuta en Android o Windows para conexión directa nativa.';
+      debugPrint('[PlayAppDataGateway] $lastError');
+      return false;
+    }
+
     try {
       final db = await mongo.Db.create(mongoUri);
       await db.open().timeout(const Duration(seconds: 10));
