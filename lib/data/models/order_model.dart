@@ -39,6 +39,7 @@ class OrderModel {
 
   String get shortId => id.length > 8 ? id.substring(0, 8) : id;
   String get displayCode => '#$shortId';
+  bool get isPaid => estadoPago.toLowerCase().contains('pagado') || estadoPago.toLowerCase().contains('aprobado');
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     final rawItems = json['items'] as List<dynamic>? ??

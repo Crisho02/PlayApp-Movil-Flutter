@@ -6,6 +6,10 @@ class ReviewModel {
   final String fechaFormateada;
   final DateTime? fechaOriginal;
 
+  String get nombre => nombreCliente;
+  int get valoracion => calificacion;
+  DateTime? get fecha => fechaOriginal;
+
   ReviewModel({
     required this.id,
     required this.nombreCliente,

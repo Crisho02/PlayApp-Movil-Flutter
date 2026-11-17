@@ -7,12 +7,18 @@ import 'package:playapp_movil_flutter/data/models/order_model.dart';
 import 'package:playapp_movil_flutter/data/models/product_model.dart';
 import 'package:playapp_movil_flutter/data/models/review_model.dart';
 import 'package:playapp_movil_flutter/data/models/user_model.dart';
+import 'package:playapp_movil_flutter/data/models/admin_weather_model.dart';
+import 'package:playapp_movil_flutter/data/models/admin_report_model.dart';
+import 'package:playapp_movil_flutter/data/models/admin_user_model.dart';
+import 'package:playapp_movil_flutter/presentation/screens/admin/admin_dashboard_screen.dart';
 import 'package:playapp_movil_flutter/presentation/screens/cart/cart_screen.dart';
 import 'package:playapp_movil_flutter/presentation/screens/checkout/wompi_card_screen.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/beach_map_widget.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/product_card.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/responsive_product_grid.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/status_badge.dart';
+import 'package:playapp_movil_flutter/providers/admin_provider.dart';
+import 'package:playapp_movil_flutter/providers/auth_provider.dart';
 import 'package:playapp_movil_flutter/providers/cart_provider.dart';
 import 'package:playapp_movil_flutter/providers/order_provider.dart';
 import 'package:playapp_movil_flutter/providers/product_provider.dart';
@@ -390,6 +396,135 @@ void main() {
       expect(find.text('Bocagrande Central (Hotel Caribe)'), findsOneWidget);
       expect(find.text('N° Carpa / Mesa'), findsOneWidget);
       expect(find.text('Referencia / Toalla'), findsOneWidget);
+    });
+
+    test('AdminWeatherModel parses weather without raw string dumps', () {
+      final json = {
+        'description': 'cielo claro',
+        'observedAt': '17/11/2026 18:14:06',
+        'consultedAt': '17/11/2026 18:19:52',
+        'metrics': [
+          {'label': 'Temperatura', 'value': '30,0 °C'},
+          {'label': 'Sensación térmica', 'value': '36,1 °C'},
+          {'label': 'Viento', 'value': '17,7 km/h'},
+          {'label': 'Humedad', 'value': '74,0 %'},
+          {'label': 'Nubosidad', 'value': '0,0 %'},
+          {'label': 'Presión atmosférica', 'value': '1007,0 hPa'},
+          {'label': 'Visibilidad', 'value': '10,0 km'},
+          {'label': 'Amanecer', 'value': '17/11/2026 05:58:15'},
+          {'label': 'Atardecer', 'value': '17/11/2026 17:36:24'},
+        ],
+        'estimate': {
+          'minimum': 0,
+          'maximum': 1,
+          'condition': 'Noche',
+          'explanation': 'En Bocagrande se registran 30,0 °C.',
+          'summary': 'Durante la noche se espera una afluencia muy baja.',
+        },
+        'artwork': {'key': 'night', 'night': true},
+      };
+
+      final weather = AdminWeatherModel.fromJson(json);
+
+      expect(weather.description, 'cielo claro');
+      expect(weather.temperature, '30,0 °C');
+      expect(weather.feelsLike, '36,1 °C');
+      expect(weather.wind, '17,7 km/h');
+      expect(weather.humidity, '74,0 %');
+      expect(weather.clouds, '0,0 %');
+      expect(weather.pressure, '1007,0 hPa');
+      expect(weather.visibility, '10,0 km');
+      expect(weather.sunrise, '05:58:15');
+      expect(weather.sunset, '17:36:24');
+      expect(weather.isNight, isTrue);
+
+      expect(weather.estimate, isNotNull);
+      expect(weather.estimate!.minimum, 0);
+      expect(weather.estimate!.maximum, 1);
+      expect(weather.estimate!.condition, 'Noche');
+
+      // Verificar que NO se produzcan volcados de mapas como texto
+      expect(weather.temperature.contains('{label:'), isFalse);
+      expect(weather.description.contains('{minimum:'), isFalse);
+    });
+
+    test('AdminReportModel parses executive metrics and top products', () {
+      final json = {
+        'pedidos': {
+          'totalPedidos': 130,
+          'ingresosTotales': 28224000.0,
+          'promedioProductosPorPedido': 13.2,
+          'ingresosMensuales': [
+            {'anio': 2026, 'mes': 11, 'periodo': '2026-11', 'pedidos': 17, 'ingresos': 523000.0},
+          ],
+        },
+        'productosTop': [
+          {'id': 'p1', 'nombre': 'Cerveza Club Colombia', 'precio': 8000.0, 'cantidadVendida': 140, 'ingresosGenerados': 1120000.0},
+          {'id': 'p2', 'nombre': 'Ceviche de camarón', 'precio': 28000.0, 'cantidadVendida': 85, 'ingresosGenerados': 2380000.0},
+        ],
+      };
+
+      final report = AdminReportModel.fromJson(json);
+
+      expect(report.totalPedidos, 130);
+      expect(report.ingresosTotales, 28224000.0);
+      expect(report.promedioProductosPorPedido, 13.2);
+      expect(report.ingresosMensuales.length, 1);
+      expect(report.ingresosMensuales.first.periodo, '2026-11');
+      expect(report.productosTop.length, 2);
+      expect(report.productosTop.first.nombre, 'Cerveza Club Colombia');
+      expect(report.productosTop.first.cantidadVendida, 140);
+    });
+
+    test('AdminUserModel parses users and detects admin rights', () {
+      final jsonUser = {
+        'id': 'u1',
+        'nombre': 'Cristian Tapias',
+        'correo': 'sear0231@gmail.com',
+        'rol': 'ROLE_USER',
+        'esAdmin': false,
+      };
+
+      final jsonAdmin = {
+        'id': 'a1',
+        'nombre': 'Administrador PlayApp',
+        'correo': 'adminplayapp01@gmail.com',
+        'rol': 'ROLE_ADMIN',
+        'esAdmin': true,
+      };
+
+      final user = AdminUserModel.fromJson(jsonUser);
+      final admin = AdminUserModel.fromJson(jsonAdmin);
+
+      expect(user.esAdmin, isFalse);
+      expect(user.rol, 'ROLE_USER');
+      expect(admin.esAdmin, isTrue);
+      expect(admin.rol, 'ROLE_ADMIN');
+    });
+
+    testWidgets('AdminDashboardScreen blocks non-admin users with access denied view', (WidgetTester tester) async {
+      final auth = AuthProvider();
+      final adminProv = AdminProvider();
+      final prodProv = ProductProvider();
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: auth),
+            ChangeNotifierProvider.value(value: adminProv),
+            ChangeNotifierProvider.value(value: prodProv),
+          ],
+          child: const MaterialApp(
+            home: AdminDashboardScreen(),
+          ),
+        ),
+      );
+
+      // Dado que auth no tiene usuario administrador, debe mostrar acceso denegado
+      expect(find.text('Acceso No Autorizado'), findsOneWidget);
+      expect(find.text('Acceso Restringido'), findsOneWidget);
+      expect(find.text('Volver a la Tienda'), findsOneWidget);
+      expect(find.byIcon(Icons.lock_rounded), findsOneWidget);
     });
   });
 }

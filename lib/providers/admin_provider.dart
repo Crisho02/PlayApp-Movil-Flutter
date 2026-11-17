@@ -3,18 +3,37 @@ import '../core/constants/app_constants.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_endpoints.dart';
 import '../core/storage/session_manager.dart';
+import '../data/models/admin_report_model.dart';
+import '../data/models/admin_user_model.dart';
+import '../data/models/admin_weather_model.dart';
 import '../data/models/order_model.dart';
+import '../data/models/review_model.dart';
 
 class AdminProvider extends ChangeNotifier {
   List<OrderModel> _adminOrders = [];
   Map<String, dynamic> _metrics = {};
+  AdminWeatherModel? _weather;
+  AdminReportModel? _report;
+  List<AdminUserModel> _users = [];
+  List<ReviewModel> _adminReviews = [];
+
   bool _isLoading = false;
   String? _errorMessage;
 
+  // Prediction state
+  bool _isPredicting = false;
+  Map<String, dynamic>? _lastPredictionResult;
+
   List<OrderModel> get adminOrders => _adminOrders;
   Map<String, dynamic> get metrics => _metrics;
+  AdminWeatherModel? get weather => _weather;
+  AdminReportModel? get report => _report;
+  List<AdminUserModel> get users => _users;
+  List<ReviewModel> get adminReviews => _adminReviews;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool get isPredicting => _isPredicting;
+  Map<String, dynamic>? get lastPredictionResult => _lastPredictionResult;
 
   String? _getAdminEmail() {
     return SessionManager.getUser()?.email ?? 'adminplayapp01@gmail.com';
@@ -28,6 +47,9 @@ class AdminProvider extends ChangeNotifier {
     await Future.wait([
       fetchAdminOrders(),
       fetchMetrics(),
+      fetchReports(),
+      fetchUsers(),
+      fetchAdminReviews(),
     ]);
 
     _isLoading = false;
@@ -73,16 +95,163 @@ class AdminProvider extends ChangeNotifier {
 
       if (res.success && res.data != null) {
         _metrics = res.data!;
+        if (_metrics['clima'] is Map<String, dynamic>) {
+          Map<String, dynamic>? loc;
+          if (_metrics['ubicacion'] is Map<String, dynamic>) {
+            loc = _metrics['ubicacion'] as Map<String, dynamic>;
+          }
+          _weather = AdminWeatherModel.fromJson(
+            _metrics['clima'] as Map<String, dynamic>,
+            location: loc,
+          );
+        }
       }
     } catch (_) {}
+  }
+
+  Future<void> fetchReports() async {
+    final correo = _getAdminEmail();
+    if (correo == null) return;
+
+    try {
+      final res = await ApiClient.get<Map<String, dynamic>>(
+        ApiEndpoints.adminReports,
+        queryParameters: {'correo': correo},
+      );
+
+      if (res.success && res.data != null) {
+        _report = AdminReportModel.fromJson(res.data!);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> fetchUsers() async {
+    final correo = _getAdminEmail();
+    if (correo == null) return;
+
+    try {
+      final res = await ApiClient.get<dynamic>(
+        ApiEndpoints.adminUsers,
+        queryParameters: {'correo': correo},
+      );
+
+      if (res.success && res.data is List) {
+        _users = (res.data as List)
+            .map((u) => AdminUserModel.fromJson(u as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> fetchAdminReviews() async {
+    final correo = _getAdminEmail();
+    if (correo == null) return;
+
+    try {
+      final res = await ApiClient.get<dynamic>(
+        ApiEndpoints.adminReviews,
+        queryParameters: {'correo': correo},
+      );
+
+      if (res.success && res.data is List) {
+        _adminReviews = (res.data as List)
+            .map((r) => ReviewModel.fromJson(r as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {}
+  }
+
+  Future<Map<String, dynamic>?> predictSales({
+    required String diaSemana,
+    required String producto,
+    required String categoria,
+    required int precio,
+    required String clima,
+    required String temporada,
+  }) async {
+    final correo = _getAdminEmail();
+    _isPredicting = true;
+    notifyListeners();
+
+    try {
+      final res = await ApiClient.post<Map<String, dynamic>>(
+        ApiEndpoints.adminPredictionSales,
+        body: {
+          'correo': correo,
+          'diaSemana': diaSemana,
+          'producto': producto,
+          'categoria': categoria,
+          'precio': precio,
+          'clima': clima,
+          'temporada': temporada,
+        },
+      );
+
+      _isPredicting = false;
+      if (res.success && res.data != null) {
+        _lastPredictionResult = res.data;
+        notifyListeners();
+        return res.data;
+      }
+    } catch (_) {
+      _isPredicting = false;
+      notifyListeners();
+    }
+    return null;
+  }
+
+  Future<bool> createAdminUser({
+    required String nombreCompleto,
+    required String correo,
+    required String password,
+  }) async {
+    final adminCorreo = _getAdminEmail();
+    try {
+      final res = await ApiClient.post(
+        ApiEndpoints.adminUsersCreate,
+        body: {
+          'adminCorreo': adminCorreo,
+          'nombreCompleto': nombreCompleto,
+          'correo': correo,
+          'password': password,
+        },
+      );
+
+      if (res.success) {
+        await fetchUsers();
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> deleteAdminReview(String reviewId) async {
+    final correo = _getAdminEmail();
+    try {
+      final res = await ApiClient.delete(
+        ApiEndpoints.adminReviewDetail(reviewId),
+        queryParameters: {'correo': correo},
+      );
+
+      if (res.success) {
+        _adminReviews.removeWhere((r) => r.id == reviewId);
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> updateOrderStatus(String orderId, String newStatus) async {
     final correo = _getAdminEmail();
     int estadoNum = 0;
-    if (newStatus.contains('preparaci')) estadoNum = 1;
-    if (newStatus.contains('terminado')) estadoNum = 2;
-    if (newStatus.contains('cancelado')) estadoNum = 3;
+    if (newStatus.toLowerCase().contains('preparaci')) estadoNum = 1;
+    if (newStatus.toLowerCase().contains('terminado')) estadoNum = 2;
+    if (newStatus.toLowerCase().contains('cancelado')) estadoNum = 3;
 
     try {
       final res = await ApiClient.post(
@@ -165,20 +334,26 @@ class AdminProvider extends ChangeNotifier {
     required double precio,
     required int cantidad,
     required int categoriaId,
+    String? base64Image,
   }) async {
     final correo = _getAdminEmail();
 
     try {
+      final Map<String, dynamic> body = {
+        'correo': correo,
+        'nombre': nombre,
+        'descripcion': descripcion,
+        'precio': precio,
+        'stock': cantidad,
+        'categoria': categoriaId,
+      };
+      if (base64Image != null && base64Image.isNotEmpty) {
+        body['base64Image'] = base64Image;
+      }
+
       final res = await ApiClient.post(
         ApiEndpoints.adminProducts,
-        body: {
-          'correo': correo,
-          'nombre': nombre,
-          'descripcion': descripcion,
-          'precio': precio,
-          'stock': cantidad,
-          'categoria': categoriaId,
-        },
+        body: body,
       );
       return res.success;
     } catch (_) {
@@ -193,20 +368,26 @@ class AdminProvider extends ChangeNotifier {
     required double precio,
     required int cantidad,
     required int categoriaId,
+    String? base64Image,
   }) async {
     final correo = _getAdminEmail();
 
     try {
+      final Map<String, dynamic> body = {
+        'correo': correo,
+        'nombre': nombre,
+        'descripcion': descripcion,
+        'precio': precio,
+        'stock': cantidad,
+        'categoria': categoriaId,
+      };
+      if (base64Image != null && base64Image.isNotEmpty) {
+        body['base64Image'] = base64Image;
+      }
+
       final res = await ApiClient.put(
         ApiEndpoints.adminProductDetail(id),
-        body: {
-          'correo': correo,
-          'nombre': nombre,
-          'descripcion': descripcion,
-          'precio': precio,
-          'stock': cantidad,
-          'categoria': categoriaId,
-        },
+        body: body,
       );
       return res.success;
     } catch (_) {

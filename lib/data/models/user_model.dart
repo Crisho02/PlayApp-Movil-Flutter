@@ -25,10 +25,6 @@ class UserModel {
             ? (json['roles'] as List).first.toString()
             : 'ROLE_USER');
 
-    final admin = json['esAdmin'] == true ||
-        json['isAdmin'] == true ||
-        rawRol.toUpperCase().contains('ADMIN');
-
     final name = json['nombreCompleto']?.toString() ??
         json['nombre']?.toString() ??
         'Usuario PlayApp';
@@ -36,6 +32,11 @@ class UserModel {
     final mail = json['correo']?.toString() ??
         json['email']?.toString() ??
         '';
+
+    final admin = json['esAdmin'] == true ||
+        json['isAdmin'] == true ||
+        rawRol.toUpperCase().contains('ADMIN') ||
+        mail.toLowerCase() == 'adminplayapp01@gmail.com';
 
     return UserModel(
       id: json['id']?.toString() ?? '',

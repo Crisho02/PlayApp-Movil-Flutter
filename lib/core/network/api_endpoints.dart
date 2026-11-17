@@ -29,4 +29,10 @@ class ApiEndpoints {
   static const String adminProducts = '/api/admin/products';
   static String adminProductDetail(String id) => '/api/admin/products/$id';
   static const String adminMetrics = '/api/admin/metrics';
+  static const String adminReports = '/api/admin/reports';
+  static const String adminPredictionSales = '/api/admin/prediction/sales';
+  static const String adminUsers = '/api/admin/users';
+  static const String adminUsersCreate = '/api/admin/users/create';
+  static const String adminReviews = '/api/admin/reviews';
+  static String adminReviewDetail(String id) => '/api/admin/reviews/$id';
 }

@@ -12,6 +12,9 @@ class ProductModel {
   final String? imagenUrl;
   final String? imagenSrc;
 
+  int get stock => cantidadDisponible;
+  String? get imageUrl => imagenUrl;
+
   ProductModel({
     required this.id,
     required this.nombre,

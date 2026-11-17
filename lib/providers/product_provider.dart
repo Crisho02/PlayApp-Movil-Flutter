@@ -13,6 +13,7 @@ class ProductProvider extends ChangeNotifier {
   String _sortBy = 'default';
 
   List<ProductModel> get allProducts => _allProducts;
+  List<ProductModel> get products => _allProducts;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   int get selectedCategory => _selectedCategory;
