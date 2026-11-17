@@ -1,3 +1,4 @@
+import '../../core/utils/image_helper.dart';
 import 'product_model.dart';
 
 class CartItemModel {
@@ -30,21 +31,33 @@ class CartItemModel {
       nombre: product.nombre,
       precio: product.precio,
       cantidad: cantidad,
-      imagenUrl: product.imagenUrl,
+      imagenUrl: product.imagenUrl ?? ImageHelper.productImageUrl(product.id),
       imagenSrc: product.imagenSrc,
       assetFallback: product.localAssetFallback,
     );
   }
 
   factory CartItemModel.fromJson(Map<String, dynamic> json) {
+    final pId = json['productoId']?.toString() ?? json['id']?.toString() ?? '';
+    final name = json['nombre']?.toString() ?? 'Producto';
+
+    final rawPrice = json['precioUnitario'] ?? json['precio'] ?? 0.0;
+    final price = (rawPrice is num) ? rawPrice.toDouble() : 0.0;
+
+    final rawCant = json['cantidad'] ?? 1;
+    final cant = (rawCant is num) ? rawCant.toInt() : 1;
+
+    final imgUrl = json['imagenUrl']?.toString() ??
+        (pId.isNotEmpty ? ImageHelper.productImageUrl(pId) : null);
+
     return CartItemModel(
-      id: json['id']?.toString() ?? json['productoId']?.toString() ?? '',
-      productoId: json['productoId']?.toString() ?? json['id']?.toString() ?? '',
-      nombre: json['nombre']?.toString() ?? 'Producto',
-      precio: (json['precio'] is num) ? (json['precio'] as num).toDouble() : 0.0,
-      cantidad: (json['cantidad'] is num) ? (json['cantidad'] as num).toInt() : 1,
-      imagenUrl: json['imagenUrl']?.toString(),
-      imagenSrc: json['imagenSrc']?.toString(),
+      id: json['id']?.toString() ?? pId,
+      productoId: pId,
+      nombre: name,
+      precio: price,
+      cantidad: cant,
+      imagenUrl: imgUrl,
+      imagenSrc: json['imageSRC']?.toString() ?? json['imagenSrc']?.toString(),
       assetFallback: json['assetFallback']?.toString(),
     );
   }

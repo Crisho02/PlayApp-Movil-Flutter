@@ -5,7 +5,7 @@ class UserModel {
   final String? telefono;
   final String? direccion;
   final int? mesa;
-  final List<String> roles;
+  final String rol;
   final bool isAdmin;
 
   UserModel({
@@ -15,27 +15,36 @@ class UserModel {
     this.telefono,
     this.direccion,
     this.mesa,
-    this.roles = const [],
+    this.rol = 'ROLE_USER',
     this.isAdmin = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
-    final rolesList = (json['roles'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .toList() ??
-        [];
-    final admin = json['isAdmin'] == true ||
-        rolesList.contains('ROLE_ADMIN') ||
-        rolesList.contains('ADMIN');
+    final rawRol = json['rol']?.toString() ??
+        (json['roles'] is List && (json['roles'] as List).isNotEmpty
+            ? (json['roles'] as List).first.toString()
+            : 'ROLE_USER');
+
+    final admin = json['esAdmin'] == true ||
+        json['isAdmin'] == true ||
+        rawRol.toUpperCase().contains('ADMIN');
+
+    final name = json['nombreCompleto']?.toString() ??
+        json['nombre']?.toString() ??
+        'Usuario PlayApp';
+
+    final mail = json['correo']?.toString() ??
+        json['email']?.toString() ??
+        '';
 
     return UserModel(
       id: json['id']?.toString() ?? '',
-      nombre: json['nombre']?.toString() ?? '',
-      email: json['email']?.toString() ?? '',
+      nombre: name,
+      email: mail,
       telefono: json['telefono']?.toString(),
       direccion: json['direccion']?.toString(),
       mesa: json['mesa'] is num ? (json['mesa'] as num).toInt() : null,
-      roles: rolesList,
+      rol: rawRol,
       isAdmin: admin,
     );
   }
@@ -43,12 +52,15 @@ class UserModel {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'nombreCompleto': nombre,
       'nombre': nombre,
+      'correo': email,
       'email': email,
       'telefono': telefono,
       'direccion': direccion,
       'mesa': mesa,
-      'roles': roles,
+      'rol': rol,
+      'esAdmin': isAdmin,
       'isAdmin': isAdmin,
     };
   }
@@ -60,7 +72,7 @@ class UserModel {
     String? telefono,
     String? direccion,
     int? mesa,
-    List<String>? roles,
+    String? rol,
     bool? isAdmin,
   }) {
     return UserModel(
@@ -70,7 +82,7 @@ class UserModel {
       telefono: telefono ?? this.telefono,
       direccion: direccion ?? this.direccion,
       mesa: mesa ?? this.mesa,
-      roles: roles ?? this.roles,
+      rol: rol ?? this.rol,
       isAdmin: isAdmin ?? this.isAdmin,
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/cart_provider.dart';
 import '../../../providers/order_provider.dart';
 import '../../widgets/custom_app_bar.dart';
@@ -20,6 +21,33 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
   bool _isSubmitting = false;
 
   Future<void> _handleConfirm() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final user = auth.currentUser;
+
+    if (user == null) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Inicio de Sesión Requerido'),
+          content: const Text('Para confirmar tu pedido en la playa, por favor inicia sesión con tu cuenta de PlayApp.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.pushNamed(context, '/login');
+              },
+              child: const Text('Iniciar Sesión'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final cart = Provider.of<CartProvider>(context, listen: false);
     final orderProv = Provider.of<OrderProvider>(context, listen: false);
 
@@ -32,6 +60,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
           'shipmentData': widget.shipmentData,
           'total': cart.total,
           'items': cart.itemsList,
+          'correo': user.email,
         },
       );
     } else {
@@ -39,6 +68,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
       setState(() => _isSubmitting = true);
 
       final order = await orderProv.createOrder(
+        correo: user.email,
         metodoPago: _selectedMethod,
         direccion: widget.shipmentData['direccion'] ?? 'Sector playa',
         barrio: widget.shipmentData['barrio'] ?? 'Bocagrande',

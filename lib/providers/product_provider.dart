@@ -10,7 +10,7 @@ class ProductProvider extends ChangeNotifier {
 
   int _selectedCategory = 0; // 0 = Todos, 1 = Comidas, 2 = Bebidas, 3 = Servicios
   String _searchQuery = '';
-  String _sortBy = 'default'; // 'default', 'price_asc', 'price_desc', 'name_asc'
+  String _sortBy = 'default';
 
   List<ProductModel> get allProducts => _allProducts;
   bool get isLoading => _isLoading;
@@ -29,20 +29,31 @@ class ProductProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final res = await ApiClient.get<List<dynamic>>(
+      final res = await ApiClient.get<dynamic>(
         ApiEndpoints.products,
       );
 
       if (res.success && res.data != null) {
-        _allProducts = res.data!
+        List<dynamic> itemsList = [];
+        if (res.data is Map && (res.data as Map).containsKey('productos')) {
+          itemsList = res.data['productos'] as List<dynamic>;
+        } else if (res.data is List) {
+          itemsList = res.data as List<dynamic>;
+        }
+
+        _allProducts = itemsList
             .map((item) => ProductModel.fromJson(item as Map<String, dynamic>))
             .toList();
       } else {
-        // Cargar catálogo local representativo de PlayApp si no hay conexión
-        _allProducts = _getFallbackProducts();
+        _errorMessage = res.message;
+        if (_allProducts.isEmpty) {
+          _allProducts = _getFallbackProducts();
+        }
       }
     } catch (_) {
-      _allProducts = _getFallbackProducts();
+      if (_allProducts.isEmpty) {
+        _allProducts = _getFallbackProducts();
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -99,7 +110,7 @@ class ProductProvider extends ChangeNotifier {
         precio: 25000.0,
         cantidadDisponible: 20,
         categoriaId: 1,
-        categoriaNombre: 'Comidas',
+        categoriaNombre: 'Comida',
       ),
       ProductModel(
         id: '2',
@@ -108,7 +119,7 @@ class ProductProvider extends ChangeNotifier {
         precio: 35000.0,
         cantidadDisponible: 15,
         categoriaId: 1,
-        categoriaNombre: 'Comidas',
+        categoriaNombre: 'Comida',
       ),
       ProductModel(
         id: '3',
@@ -117,7 +128,7 @@ class ProductProvider extends ChangeNotifier {
         precio: 7000.0,
         cantidadDisponible: 60,
         categoriaId: 2,
-        categoriaNombre: 'Bebidas',
+        categoriaNombre: 'Bebida',
       ),
       ProductModel(
         id: '4',
@@ -126,7 +137,7 @@ class ProductProvider extends ChangeNotifier {
         precio: 14000.0,
         cantidadDisponible: 25,
         categoriaId: 2,
-        categoriaNombre: 'Bebidas',
+        categoriaNombre: 'Bebida',
       ),
       ProductModel(
         id: '5',
@@ -135,7 +146,7 @@ class ProductProvider extends ChangeNotifier {
         precio: 9000.0,
         cantidadDisponible: 30,
         categoriaId: 1,
-        categoriaNombre: 'Comidas',
+        categoriaNombre: 'Comida',
       ),
       ProductModel(
         id: '6',
@@ -144,7 +155,7 @@ class ProductProvider extends ChangeNotifier {
         precio: 30000.0,
         cantidadDisponible: 10,
         categoriaId: 3,
-        categoriaNombre: 'Servicios',
+        categoriaNombre: 'Servicio',
       ),
     ];
   }

@@ -54,13 +54,26 @@ class ApiClient {
 
   static Uri _buildUri(String path, [Map<String, dynamic>? queryParameters]) {
     final baseUrl = EnvConfig.apiBaseUrl;
-    final uri = Uri.parse(baseUrl);
+    final baseUri = Uri.parse(baseUrl);
+
+    // Normalizar ruta
+    String cleanPath = path;
+    if (!cleanPath.startsWith('/')) cleanPath = '/$cleanPath';
+
+    Map<String, String>? queryParams;
+    if (queryParameters != null && queryParameters.isNotEmpty) {
+      queryParams = {};
+      queryParameters.forEach((k, v) {
+        if (v != null) queryParams![k] = v.toString();
+      });
+    }
+
     return Uri(
-      scheme: uri.scheme,
-      host: uri.host,
-      port: uri.port,
-      path: path,
-      queryParameters: queryParameters?.map((k, v) => MapEntry(k, v.toString())),
+      scheme: baseUri.scheme,
+      host: baseUri.host,
+      port: baseUri.hasPort ? baseUri.port : null,
+      path: cleanPath,
+      queryParameters: queryParams,
     );
   }
 
@@ -73,7 +86,7 @@ class ApiClient {
       final uri = _buildUri(path, queryParameters);
       final response = await _client
           .get(uri, headers: _buildHeaders())
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 10));
 
       _captureCookie(response);
 
@@ -82,19 +95,19 @@ class ApiClient {
         final data = parser != null ? parser(decoded) : decoded as T;
         return ApiResponse(success: true, data: data, statusCode: response.statusCode);
       } else {
-        String msg = 'Error en servidor (${response.statusCode})';
+        String msg = 'No fue posible completar la solicitud.';
         try {
           final errJson = jsonDecode(utf8.decode(response.bodyBytes));
-          if (errJson is Map && errJson['message'] != null) {
-            msg = errJson['message'].toString();
+          if (errJson is Map) {
+            msg = errJson['error']?.toString() ?? errJson['message']?.toString() ?? msg;
           }
         } catch (_) {}
         return ApiResponse(success: false, message: msg, statusCode: response.statusCode);
       }
-    } catch (e) {
+    } catch (_) {
       return ApiResponse(
         success: false,
-        message: 'No se pudo conectar con el servidor: $e',
+        message: 'No se pudo conectar con el servicio de PlayApp. Por favor verifica tu conexión.',
         statusCode: 0,
       );
     }
@@ -113,7 +126,7 @@ class ApiClient {
             headers: _buildHeaders(),
             body: body != null ? jsonEncode(body) : null,
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 12));
 
       _captureCookie(response);
 
@@ -122,19 +135,19 @@ class ApiClient {
         final data = parser != null ? parser(decoded) : decoded as T;
         return ApiResponse(success: true, data: data, statusCode: response.statusCode);
       } else {
-        String msg = 'Error en servidor (${response.statusCode})';
+        String msg = 'No fue posible procesar la solicitud.';
         try {
           final errJson = jsonDecode(utf8.decode(response.bodyBytes));
-          if (errJson is Map && errJson['message'] != null) {
-            msg = errJson['message'].toString();
+          if (errJson is Map) {
+            msg = errJson['error']?.toString() ?? errJson['message']?.toString() ?? msg;
           }
         } catch (_) {}
         return ApiResponse(success: false, message: msg, statusCode: response.statusCode);
       }
-    } catch (e) {
+    } catch (_) {
       return ApiResponse(
         success: false,
-        message: 'No se pudo conectar con el servidor: $e',
+        message: 'No se pudo conectar con el servicio de PlayApp. Intenta nuevamente.',
         statusCode: 0,
       );
     }
@@ -153,7 +166,7 @@ class ApiClient {
             headers: _buildHeaders(),
             body: body != null ? jsonEncode(body) : null,
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 12));
 
       _captureCookie(response);
 
@@ -162,22 +175,23 @@ class ApiClient {
         final data = parser != null ? parser(decoded) : decoded as T;
         return ApiResponse(success: true, data: data, statusCode: response.statusCode);
       } else {
-        return ApiResponse(success: false, message: 'Error ${response.statusCode}', statusCode: response.statusCode);
+        return ApiResponse(success: false, message: 'Operación no completada.', statusCode: response.statusCode);
       }
-    } catch (e) {
-      return ApiResponse(success: false, message: '$e', statusCode: 0);
+    } catch (_) {
+      return ApiResponse(success: false, message: 'No se pudo conectar con el servidor.', statusCode: 0);
     }
   }
 
   static Future<ApiResponse<T>> delete<T>(
     String path, {
+    Map<String, dynamic>? queryParameters,
     T Function(dynamic json)? parser,
   }) async {
     try {
-      final uri = _buildUri(path);
+      final uri = _buildUri(path, queryParameters);
       final response = await _client
           .delete(uri, headers: _buildHeaders())
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 12));
 
       _captureCookie(response);
 
@@ -186,10 +200,10 @@ class ApiClient {
         final data = parser != null ? parser(decoded) : decoded as T;
         return ApiResponse(success: true, data: data, statusCode: response.statusCode);
       } else {
-        return ApiResponse(success: false, message: 'Error ${response.statusCode}', statusCode: response.statusCode);
+        return ApiResponse(success: false, message: 'No se pudo eliminar el elemento.', statusCode: response.statusCode);
       }
-    } catch (e) {
-      return ApiResponse(success: false, message: '$e', statusCode: 0);
+    } catch (_) {
+      return ApiResponse(success: false, message: 'Error de conexión con el servidor.', statusCode: 0);
     }
   }
 }

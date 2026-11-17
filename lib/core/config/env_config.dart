@@ -1,28 +1,36 @@
-import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 
 class EnvConfig {
-  /// Base URL por defecto.
-  /// En Android Emulator suele ser 10.0.2.2:8080
-  /// En iOS / Web / Desktop suele ser localhost:8080
-  static String get defaultBaseUrl {
-    if (kIsWeb) return 'http://localhost:8080';
-    try {
-      if (Platform.isAndroid) return 'http://10.0.2.2:8080';
-    } catch (_) {}
+  /// URL base configurada en tiempo de compilación mediante:
+  /// flutter run --dart-define=API_BASE_URL=http://<IP>:8080
+  static const String _envBaseUrl = String.fromEnvironment('API_BASE_URL');
+
+  /// Resuelve la URL base automáticamente según la plataforma:
+  /// - Si se define por --dart-define, tiene prioridad.
+  /// - En Android (emulador): http://10.0.2.2:8080
+  /// - En Web: http://localhost:8080
+  /// - En iOS / Desktop / otros: http://localhost:8080
+  static String get apiBaseUrl {
+    if (_envBaseUrl.isNotEmpty) {
+      return _envBaseUrl;
+    }
+    if (kIsWeb) {
+      return 'http://localhost:8080';
+    }
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8080';
+    }
     return 'http://localhost:8080';
   }
 
-  static String apiBaseUrl = defaultBaseUrl;
-
-  /// Tarifa estándar de envío a la playa en Cartagena
+  /// Tarifa estándar de entrega en carpa en playas de Cartagena
   static const double standardDeliveryFee = 5000.0;
 
-  /// Credenciales y datos de prueba Wompi Sandbox
+  /// Llave pública de Wompi Sandbox (Bancolombia)
   static const String wompiPublicKey = 'pub_test_wQdG7hGgqZc6hK7v9b8a1c2d3e4f5a6b';
   static const String wompiCurrency = 'COP';
 
-  /// Tarjetas de prueba de Wompi Sandbox
+  /// Tarjetas de prueba Wompi Sandbox
   static const String testCardApproved = '4242424242424242';
   static const String testCardRejected = '4111111111111111';
 

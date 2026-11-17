@@ -32,40 +32,29 @@ class AuthProvider extends ChangeNotifier {
     try {
       final res = await ApiClient.post<Map<String, dynamic>>(
         ApiEndpoints.authLogin,
-        body: {'email': email.trim(), 'password': password},
+        body: {
+          'correo': email.trim(),
+          'username': email.trim(),
+          'password': password,
+        },
       );
 
       if (res.success && res.data != null) {
-        final userData = res.data!['user'] as Map<String, dynamic>;
-        final token = res.data!['token']?.toString() ?? 'session-token';
+        final userData = (res.data!['usuario'] ?? res.data!['user']) as Map<String, dynamic>;
+        final token = res.data!['token']?.toString() ?? 'session_${userData['id']}';
         _currentUser = UserModel.fromJson(userData);
         await SessionManager.saveSession(token: token, user: _currentUser!);
         _isLoading = false;
         notifyListeners();
         return true;
       } else {
-        // Soporte fallback para demostración offline con credenciales conocidas
-        if (email.trim() == 'adminplayapp01@gmail.com' && password == 'admin123') {
-          _currentUser = UserModel(
-            id: 'admin-local-id',
-            nombre: 'Administrador PlayApp',
-            email: email,
-            roles: ['ROLE_ADMIN'],
-            isAdmin: true,
-          );
-          await SessionManager.saveSession(token: 'admin-token', user: _currentUser!);
-          _isLoading = false;
-          notifyListeners();
-          return true;
-        }
-
-        _errorMessage = res.message ?? 'Credenciales incorrectas';
+        _errorMessage = res.message ?? 'Credenciales incorrectas. Por favor verifica tu correo y contraseña.';
         _isLoading = false;
         notifyListeners();
         return false;
       }
-    } catch (e) {
-      _errorMessage = 'Error de conexión: $e';
+    } catch (_) {
+      _errorMessage = 'No se pudo conectar con el servidor. Verifica tu conexión de red.';
       _isLoading = false;
       notifyListeners();
       return false;
@@ -88,8 +77,10 @@ class AuthProvider extends ChangeNotifier {
       final res = await ApiClient.post<Map<String, dynamic>>(
         ApiEndpoints.authRegister,
         body: {
+          'nombreCompleto': nombre.trim(),
           'nombre': nombre.trim(),
-          'email': email.trim(),
+          'correo': email.trim().toLowerCase(),
+          'email': email.trim().toLowerCase(),
           'password': password,
           'telefono': telefono?.trim(),
           'direccion': direccion?.trim(),
@@ -98,21 +89,21 @@ class AuthProvider extends ChangeNotifier {
       );
 
       if (res.success && res.data != null) {
-        final userData = res.data!['user'] as Map<String, dynamic>;
-        final token = res.data!['token']?.toString() ?? 'session-token';
+        final userData = (res.data!['usuario'] ?? res.data!['user']) as Map<String, dynamic>;
+        final token = res.data!['token']?.toString() ?? 'session_${userData['id']}';
         _currentUser = UserModel.fromJson(userData);
         await SessionManager.saveSession(token: token, user: _currentUser!);
         _isLoading = false;
         notifyListeners();
         return true;
       } else {
-        _errorMessage = res.message ?? 'No se pudo registrar el usuario';
+        _errorMessage = res.message ?? 'No se pudo registrar la cuenta. Intenta con otro correo.';
         _isLoading = false;
         notifyListeners();
         return false;
       }
-    } catch (e) {
-      _errorMessage = 'Error al registrarse: $e';
+    } catch (_) {
+      _errorMessage = 'Error de conexión al registrar. Intenta nuevamente.';
       _isLoading = false;
       notifyListeners();
       return false;

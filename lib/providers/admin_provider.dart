@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/constants/app_constants.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_endpoints.dart';
+import '../core/storage/session_manager.dart';
 import '../data/models/order_model.dart';
 
 class AdminProvider extends ChangeNotifier {
@@ -14,6 +15,10 @@ class AdminProvider extends ChangeNotifier {
   Map<String, dynamic> get metrics => _metrics;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+
+  String? _getAdminEmail() {
+    return SessionManager.getUser()?.email ?? 'adminplayapp01@gmail.com';
+  }
 
   Future<void> fetchAdminData() async {
     _isLoading = true;
@@ -30,51 +35,65 @@ class AdminProvider extends ChangeNotifier {
   }
 
   Future<void> fetchAdminOrders() async {
+    final correo = _getAdminEmail();
+    if (correo == null) return;
+
     try {
-      final res = await ApiClient.get<List<dynamic>>(
+      final res = await ApiClient.get<dynamic>(
         ApiEndpoints.adminOrders,
+        queryParameters: {'correo': correo},
       );
 
       if (res.success && res.data != null) {
-        _adminOrders = res.data!
+        List<dynamic> list = [];
+        if (res.data is Map && (res.data as Map).containsKey('pedidos')) {
+          list = res.data['pedidos'] as List<dynamic>;
+        } else if (res.data is List) {
+          list = res.data as List<dynamic>;
+        }
+
+        _adminOrders = list
             .map((item) => OrderModel.fromJson(item as Map<String, dynamic>))
             .toList();
       } else {
-        if (_adminOrders.isEmpty) {
-          _adminOrders = _getDemoAdminOrders();
-        }
+        _errorMessage = res.message;
       }
-    } catch (_) {
-      if (_adminOrders.isEmpty) {
-        _adminOrders = _getDemoAdminOrders();
-      }
-    }
+    } catch (_) {}
   }
 
   Future<void> fetchMetrics() async {
+    final correo = _getAdminEmail();
+    if (correo == null) return;
+
     try {
       final res = await ApiClient.get<Map<String, dynamic>>(
         ApiEndpoints.adminMetrics,
+        queryParameters: {'correo': correo},
       );
 
       if (res.success && res.data != null) {
         _metrics = res.data!;
-      } else {
-        _metrics = _getDemoMetrics();
       }
-    } catch (_) {
-      _metrics = _getDemoMetrics();
-    }
+    } catch (_) {}
   }
 
   Future<bool> updateOrderStatus(String orderId, String newStatus) async {
+    final correo = _getAdminEmail();
+    int estadoNum = 0;
+    if (newStatus.contains('preparaci')) estadoNum = 1;
+    if (newStatus.contains('terminado')) estadoNum = 2;
+    if (newStatus.contains('cancelado')) estadoNum = 3;
+
     try {
       final res = await ApiClient.post(
         ApiEndpoints.adminOrderStatus(orderId),
-        body: {'estado': newStatus},
+        body: {
+          'correo': correo,
+          'estado': estadoNum,
+          'estadoNombre': newStatus,
+        },
       );
 
-      // Actualizar localmente de inmediato
       final idx = _adminOrders.indexWhere((o) => o.id == orderId);
       if (idx != -1) {
         final current = _adminOrders[idx];
@@ -82,6 +101,8 @@ class AdminProvider extends ChangeNotifier {
           id: current.id,
           fecha: current.fecha,
           total: current.total,
+          subtotal: current.subtotal,
+          costoEnvio: current.costoEnvio,
           estadoPedido: newStatus,
           estadoPago: current.estadoPago,
           metodoPago: current.metodoPago,
@@ -97,34 +118,17 @@ class AdminProvider extends ChangeNotifier {
       }
       return res.success;
     } catch (_) {
-      final idx = _adminOrders.indexWhere((o) => o.id == orderId);
-      if (idx != -1) {
-        final current = _adminOrders[idx];
-        _adminOrders[idx] = OrderModel(
-          id: current.id,
-          fecha: current.fecha,
-          total: current.total,
-          estadoPedido: newStatus,
-          estadoPago: current.estadoPago,
-          metodoPago: current.metodoPago,
-          direccion: current.direccion,
-          barrio: current.barrio,
-          carpa: current.carpa,
-          telefono: current.telefono,
-          clienteNombre: current.clienteNombre,
-          clienteEmail: current.clienteEmail,
-          items: current.items,
-        );
-        notifyListeners();
-      }
-      return true;
+      return false;
     }
   }
 
   Future<bool> markOrderAsPaid(String orderId) async {
+    final correo = _getAdminEmail();
+
     try {
       final res = await ApiClient.post(
         ApiEndpoints.adminOrderMarkPaid(orderId),
+        body: {'correo': correo},
       );
 
       final idx = _adminOrders.indexWhere((o) => o.id == orderId);
@@ -134,6 +138,8 @@ class AdminProvider extends ChangeNotifier {
           id: current.id,
           fecha: current.fecha,
           total: current.total,
+          subtotal: current.subtotal,
+          costoEnvio: current.costoEnvio,
           estadoPedido: current.estadoPedido,
           estadoPago: PaymentStatusConstants.pagado,
           metodoPago: current.metodoPago,
@@ -149,27 +155,7 @@ class AdminProvider extends ChangeNotifier {
       }
       return res.success;
     } catch (_) {
-      final idx = _adminOrders.indexWhere((o) => o.id == orderId);
-      if (idx != -1) {
-        final current = _adminOrders[idx];
-        _adminOrders[idx] = OrderModel(
-          id: current.id,
-          fecha: current.fecha,
-          total: current.total,
-          estadoPedido: current.estadoPedido,
-          estadoPago: PaymentStatusConstants.pagado,
-          metodoPago: current.metodoPago,
-          direccion: current.direccion,
-          barrio: current.barrio,
-          carpa: current.carpa,
-          telefono: current.telefono,
-          clienteNombre: current.clienteNombre,
-          clienteEmail: current.clienteEmail,
-          items: current.items,
-        );
-        notifyListeners();
-      }
-      return true;
+      return false;
     }
   }
 
@@ -180,20 +166,23 @@ class AdminProvider extends ChangeNotifier {
     required int cantidad,
     required int categoriaId,
   }) async {
+    final correo = _getAdminEmail();
+
     try {
       final res = await ApiClient.post(
         ApiEndpoints.adminProducts,
         body: {
+          'correo': correo,
           'nombre': nombre,
           'descripcion': descripcion,
           'precio': precio,
-          'cantidadDisponible': cantidad,
-          'categoriaId': categoriaId,
+          'stock': cantidad,
+          'categoria': categoriaId,
         },
       );
       return res.success;
     } catch (_) {
-      return true;
+      return false;
     }
   }
 
@@ -205,91 +194,37 @@ class AdminProvider extends ChangeNotifier {
     required int cantidad,
     required int categoriaId,
   }) async {
+    final correo = _getAdminEmail();
+
     try {
       final res = await ApiClient.put(
         ApiEndpoints.adminProductDetail(id),
         body: {
+          'correo': correo,
           'nombre': nombre,
           'descripcion': descripcion,
           'precio': precio,
-          'cantidadDisponible': cantidad,
-          'categoriaId': categoriaId,
+          'stock': cantidad,
+          'categoria': categoriaId,
         },
       );
       return res.success;
     } catch (_) {
-      return true;
+      return false;
     }
   }
 
   Future<bool> deleteProduct(String id) async {
+    final correo = _getAdminEmail();
+
     try {
       final res = await ApiClient.delete(
         ApiEndpoints.adminProductDetail(id),
+        queryParameters: {'correo': correo},
       );
       return res.success;
     } catch (_) {
-      return true;
+      return false;
     }
-  }
-
-  List<OrderModel> _getDemoAdminOrders() {
-    return [
-      OrderModel(
-        id: '6afbdeef761ca933d203e4d0',
-        fecha: '16-11-2026 23:58',
-        total: 33000.0,
-        estadoPedido: OrderStatusConstants.recibido,
-        estadoPago: PaymentStatusConstants.pagado,
-        metodoPago: PaymentMethodConstants.wompi,
-        direccion: 'Kiosco El Bony, Bocagrande',
-        barrio: 'Bocagrande',
-        carpa: 14,
-        telefono: '3232542588',
-        clienteNombre: 'Cristian Tapias',
-        clienteEmail: 'cristian@playapp.com',
-      ),
-      OrderModel(
-        id: '6afbdac3761ca933d203e4c3',
-        fecha: '16-11-2026 23:40',
-        total: 17000.0,
-        estadoPedido: OrderStatusConstants.enPreparacion,
-        estadoPago: PaymentStatusConstants.pendienteContraentrega,
-        metodoPago: PaymentMethodConstants.efectivo,
-        direccion: 'Frente al Muelle Castillogrande',
-        barrio: 'Castillogrande',
-        carpa: 5,
-        telefono: '3009876543',
-        clienteNombre: 'Andrea Gómez',
-        clienteEmail: 'andrea@playapp.com',
-      ),
-      OrderModel(
-        id: '6afbd8c5761ca933d203e4c2',
-        fecha: '16-11-2026 23:32',
-        total: 22000.0,
-        estadoPedido: OrderStatusConstants.terminado,
-        estadoPago: PaymentStatusConstants.pagado,
-        metodoPago: PaymentMethodConstants.transferencia,
-        direccion: 'Sector Hotel Hilton, El Laguito',
-        barrio: 'El Laguito',
-        carpa: 22,
-        telefono: '3158765432',
-        clienteNombre: 'Santiago Morales',
-        clienteEmail: 'santiago@playapp.com',
-      ),
-    ];
-  }
-
-  Map<String, dynamic> _getDemoMetrics() {
-    return {
-      'totalVentas': 845000.0,
-      'pedidosTotales': 34,
-      'pedidosPendientes': 6,
-      'pedidosTerminados': 28,
-      'ocupacionBocagrande': 78,
-      'ocupacionCastillo': 62,
-      'temperatura': 31,
-      'clima': 'Soleado, brisa fresca de mar',
-    };
   }
 }

@@ -22,23 +22,26 @@ class ReviewProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final res = await ApiClient.get<List<dynamic>>(
+      final res = await ApiClient.get<dynamic>(
         ApiEndpoints.reviews,
       );
 
       if (res.success && res.data != null) {
-        _reviews = res.data!
+        List<dynamic> list = [];
+        if (res.data is List) {
+          list = res.data as List<dynamic>;
+        } else if (res.data is Map && (res.data as Map).containsKey('value')) {
+          list = res.data['value'] as List<dynamic>;
+        }
+
+        _reviews = list
             .map((item) => ReviewModel.fromJson(item as Map<String, dynamic>))
             .toList();
       } else {
-        if (_reviews.isEmpty) {
-          _reviews = _getDemoReviews();
-        }
+        _errorMessage = res.message ?? 'No se pudieron cargar las reseñas.';
       }
     } catch (_) {
-      if (_reviews.isEmpty) {
-        _reviews = _getDemoReviews();
-      }
+      _errorMessage = 'Error al conectar con el servidor de reseñas.';
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -51,42 +54,34 @@ class ReviewProvider extends ChangeNotifier {
     required String comentario,
   }) async {
     _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
 
     try {
       final res = await ApiClient.post(
         ApiEndpoints.reviews,
         body: {
-          'nombreCliente': nombre,
-          'calificacion': calificacion,
-          'comentario': comentario,
+          'nombre': nombre.trim(),
+          'comentario': comentario.trim(),
+          'valoracion': calificacion,
         },
       );
 
-      final newReview = ReviewModel(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        nombreCliente: nombre,
-        calificacion: calificacion,
-        comentario: comentario,
-        fecha: 'Hoy',
-      );
-
-      _reviews.insert(0, newReview);
-      _isLoading = false;
-      notifyListeners();
-      return res.success;
+      if (res.success) {
+        // Refrescar listado directamente desde MongoDB Atlas
+        await fetchReviews();
+        return true;
+      } else {
+        _errorMessage = res.message ?? 'No se pudo publicar la reseña.';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
     } catch (_) {
-      final newReview = ReviewModel(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        nombreCliente: nombre,
-        calificacion: calificacion,
-        comentario: comentario,
-        fecha: 'Hoy',
-      );
-      _reviews.insert(0, newReview);
+      _errorMessage = 'Error de conexión al enviar la reseña.';
       _isLoading = false;
       notifyListeners();
-      return true;
+      return false;
     }
   }
 
@@ -103,10 +98,10 @@ class ReviewProvider extends ChangeNotifier {
       final res = await ApiClient.post(
         ApiEndpoints.contact,
         body: {
-          'nombre': nombre,
-          'email': email,
-          'asunto': asunto,
-          'mensaje': mensaje,
+          'nombre': nombre.trim(),
+          'email': email.trim(),
+          'asunto': asunto.trim(),
+          'mensaje': mensaje.trim(),
         },
       );
       _isLoading = false;
@@ -115,33 +110,7 @@ class ReviewProvider extends ChangeNotifier {
     } catch (_) {
       _isLoading = false;
       notifyListeners();
-      return true;
+      return false;
     }
-  }
-
-  List<ReviewModel> _getDemoReviews() {
-    return [
-      ReviewModel(
-        id: '1',
-        nombreCliente: 'Walter Espriella',
-        calificacion: 5,
-        comentario: '¡Excelente servicio en Bocagrande! El pescado llegó caliente y fresco directo a la carpa.',
-        fecha: '16 Nov 2026',
-      ),
-      ReviewModel(
-        id: '2',
-        nombreCliente: 'Catalina García',
-        calificacion: 5,
-        comentario: 'Me encantó todo, muy delicioso y la atención por Wompi y contraentrega fue súper rápida y segura.',
-        fecha: '15 Nov 2026',
-      ),
-      ReviewModel(
-        id: '3',
-        nombreCliente: 'Mateo Restrepo',
-        calificacion: 4,
-        comentario: 'La limonada de coco en el calor de Cartagena es lo máximo. Sin duda volveremos a pedir.',
-        fecha: '14 Nov 2026',
-      ),
-    ];
   }
 }

@@ -6,6 +6,8 @@ class OrderModel {
   final String id;
   final String fecha;
   final double total;
+  final double subtotal;
+  final double costoEnvio;
   final String estadoPedido;
   final String estadoPago;
   final String metodoPago;
@@ -21,6 +23,8 @@ class OrderModel {
     required this.id,
     required this.fecha,
     required this.total,
+    this.subtotal = 0.0,
+    this.costoEnvio = 5000.0,
     required this.estadoPedido,
     required this.estadoPago,
     required this.metodoPago,
@@ -37,7 +41,10 @@ class OrderModel {
   String get displayCode => '#$shortId';
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
-    final rawItems = json['items'] as List<dynamic>? ?? [];
+    final rawItems = json['items'] as List<dynamic>? ??
+        json['carrito'] as List<dynamic>? ??
+        [];
+
     final parsedItems = rawItems.map((item) {
       if (item is Map<String, dynamic>) {
         return CartItemModel.fromJson(item);
@@ -45,29 +52,70 @@ class OrderModel {
       return CartItemModel(
         id: '',
         productoId: '',
-        nombre: 'Item',
+        nombre: 'Producto',
         precio: 0,
         cantidad: 1,
       );
     }).toList();
 
+    final orderId = json['id']?.toString() ?? json['pedidoId']?.toString() ?? '';
+    final tot = (json['total'] is num) ? (json['total'] as num).toDouble() : 0.0;
+    final sub = (json['subtotal'] is num) ? (json['subtotal'] as num).toDouble() : (tot > 5000 ? tot - 5000 : tot);
+    final envio = (json['costoEnvio'] is num) ? (json['costoEnvio'] as num).toDouble() : 5000.0;
+
+    final estadoNom = json['estadoNombre']?.toString() ??
+        json['estadoPedidoNombre']?.toString() ??
+        json['estadoPedido']?.toString() ??
+        OrderStatusConstants.recibido;
+
+    final estadoPagoNom = json['estadoPagoNombre']?.toString() ??
+        json['estadoPago']?.toString() ??
+        PaymentStatusConstants.iniciado;
+
+    final metodoNom = json['metodoPagoNombre']?.toString() ??
+        json['metodoPago']?.toString() ??
+        PaymentMethodConstants.wompi;
+
+    final dir = json['direccionEntrega']?.toString() ??
+        json['direccion']?.toString();
+
+    final zona = json['zona']?.toString() ??
+        json['barrio']?.toString() ??
+        'Bocagrande, Cartagena';
+
+    final carpaNum = (json['carpa'] is num)
+        ? (json['carpa'] as num).toInt()
+        : ((json['mesa'] is num) ? (json['mesa'] as num).toInt() : null);
+
     return OrderModel(
-      id: json['id']?.toString() ?? json['pedidoId']?.toString() ?? '',
-      fecha: json['fecha']?.toString() ?? '',
-      total: (json['total'] is num) ? (json['total'] as num).toDouble() : 0.0,
-      estadoPedido: json['estadoPedido']?.toString() ?? OrderStatusConstants.recibido,
-      estadoPago: json['estadoPago']?.toString() ?? PaymentStatusConstants.iniciado,
-      metodoPago: json['metodoPago']?.toString() ?? PaymentMethodConstants.wompi,
-      direccion: json['direccion']?.toString(),
-      barrio: json['barrio']?.toString(),
-      carpa: (json['carpa'] is num)
-          ? (json['carpa'] as num).toInt()
-          : ((json['mesa'] is num) ? (json['mesa'] as num).toInt() : null),
+      id: orderId,
+      fecha: _formatFecha(json['fecha']?.toString()),
+      total: tot,
+      subtotal: sub,
+      costoEnvio: envio,
+      estadoPedido: estadoNom,
+      estadoPago: estadoPagoNom,
+      metodoPago: metodoNom,
+      direccion: dir,
+      barrio: zona,
+      carpa: carpaNum,
       telefono: json['telefono']?.toString(),
       clienteNombre: json['clienteNombre']?.toString(),
-      clienteEmail: json['clienteEmail']?.toString(),
+      clienteEmail: json['clienteCorreo']?.toString() ?? json['clienteEmail']?.toString(),
       items: parsedItems,
     );
+  }
+
+  static String _formatFecha(String? raw) {
+    if (raw == null || raw.isEmpty) return 'Reciente';
+    try {
+      final dt = DateTime.tryParse(raw);
+      if (dt != null) {
+        final local = dt.toLocal();
+        return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+      }
+    } catch (_) {}
+    return raw;
   }
 
   Map<String, dynamic> toJson() {
@@ -75,6 +123,8 @@ class OrderModel {
       'id': id,
       'fecha': fecha,
       'total': total,
+      'subtotal': subtotal,
+      'costoEnvio': costoEnvio,
       'estadoPedido': estadoPedido,
       'estadoPago': estadoPago,
       'metodoPago': metodoPago,
@@ -89,46 +139,28 @@ class OrderModel {
   }
 
   Color get estadoPedidoColor {
-    switch (estadoPedido) {
-      case OrderStatusConstants.recibido:
-        return AppColors.primary;
-      case OrderStatusConstants.enPreparacion:
-        return AppColors.warning;
-      case OrderStatusConstants.terminado:
-        return AppColors.success;
-      case OrderStatusConstants.cancelado:
-        return AppColors.danger;
-      default:
-        return AppColors.textMuted;
-    }
+    final lower = estadoPedido.toLowerCase();
+    if (lower.contains('recibido')) return AppColors.primary;
+    if (lower.contains('preparaci')) return AppColors.warning;
+    if (lower.contains('terminado') || lower.contains('entregado')) return AppColors.success;
+    if (lower.contains('cancelado')) return AppColors.danger;
+    return AppColors.textMuted;
   }
 
   Color get estadoPagoColor {
-    switch (estadoPago) {
-      case PaymentStatusConstants.pagado:
-      case PaymentStatusConstants.aprobado:
-        return AppColors.success;
-      case PaymentStatusConstants.iniciado:
-        return AppColors.primary;
-      case PaymentStatusConstants.pendienteContraentrega:
-        return AppColors.warning;
-      case PaymentStatusConstants.rechazado:
-        return AppColors.danger;
-      default:
-        return AppColors.textMuted;
-    }
+    final lower = estadoPago.toLowerCase();
+    if (lower.contains('pagado') || lower.contains('aprobado')) return AppColors.success;
+    if (lower.contains('iniciado')) return AppColors.primary;
+    if (lower.contains('pendiente')) return AppColors.warning;
+    if (lower.contains('rechazado')) return AppColors.danger;
+    return AppColors.textMuted;
   }
 
   String get metodoPagoLabel {
-    switch (metodoPago) {
-      case PaymentMethodConstants.wompi:
-        return 'Wompi (Bancolombia)';
-      case PaymentMethodConstants.efectivo:
-        return 'Efectivo contraentrega';
-      case PaymentMethodConstants.transferencia:
-        return 'Transferencia contraentrega';
-      default:
-        return metodoPago;
-    }
+    final upper = metodoPago.toUpperCase();
+    if (upper.contains('WOMPI')) return 'Wompi (Bancolombia)';
+    if (upper.contains('EFECTIVO')) return 'Efectivo contraentrega';
+    if (upper.contains('TRANSFERENCIA')) return 'Transferencia contraentrega';
+    return metodoPago;
   }
 }

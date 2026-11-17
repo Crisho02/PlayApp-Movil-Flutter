@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../core/constants/app_constants.dart';
+import '../core/config/env_config.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_endpoints.dart';
 import '../data/models/cart_item_model.dart';
@@ -17,7 +17,13 @@ class OrderProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   OrderModel? get lastCreatedOrder => _lastCreatedOrder;
 
-  Future<void> fetchUserOrders() async {
+  Future<void> fetchUserOrders(String? userEmail) async {
+    if (userEmail == null || userEmail.trim().isEmpty) {
+      _userOrders = [];
+      notifyListeners();
+      return;
+    }
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -25,6 +31,7 @@ class OrderProvider extends ChangeNotifier {
     try {
       final res = await ApiClient.get<List<dynamic>>(
         ApiEndpoints.ordersUser,
+        queryParameters: {'correo': userEmail.trim()},
       );
 
       if (res.success && res.data != null) {
@@ -32,21 +39,31 @@ class OrderProvider extends ChangeNotifier {
             .map((item) => OrderModel.fromJson(item as Map<String, dynamic>))
             .toList();
       } else {
-        if (_userOrders.isEmpty) {
-          _userOrders = _getDemoOrders();
-        }
+        _errorMessage = res.message;
       }
     } catch (_) {
-      if (_userOrders.isEmpty) {
-        _userOrders = _getDemoOrders();
-      }
+      _errorMessage = 'No se pudieron sincronizar los pedidos.';
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
+  Future<OrderModel?> fetchOrderDetail(String orderId) async {
+    try {
+      final res = await ApiClient.get<Map<String, dynamic>>(
+        ApiEndpoints.orderDetail(orderId),
+      );
+
+      if (res.success && res.data != null) {
+        return OrderModel.fromJson(res.data!);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<OrderModel?> createOrder({
+    required String correo,
     required String metodoPago,
     required String direccion,
     required String barrio,
@@ -61,13 +78,15 @@ class OrderProvider extends ChangeNotifier {
     notifyListeners();
 
     final orderPayload = {
+      'correo': correo.trim(),
       'metodoPago': metodoPago,
       'direccion': direccion,
+      'zona': barrio,
       'barrio': barrio,
-      'carpa': carpa ?? 0,
+      'referencia': notas ?? '',
+      'carpa': carpa ?? 1,
+      'mesa': carpa ?? 1,
       'telefono': telefono ?? '',
-      'notas': notas ?? '',
-      'total': total,
       'items': items.map((i) => {
         'productoId': i.productoId,
         'nombre': i.nombre,
@@ -82,36 +101,21 @@ class OrderProvider extends ChangeNotifier {
         body: orderPayload,
       );
 
-      OrderModel order;
       if (res.success && res.data != null) {
-        order = OrderModel.fromJson(res.data!);
+        final order = OrderModel.fromJson(res.data!);
+        _lastCreatedOrder = order;
+        _userOrders.insert(0, order);
+        _isLoading = false;
+        notifyListeners();
+        return order;
       } else {
-        // Fallback local robusto
-        final localId = DateTime.now().millisecondsSinceEpoch.toRadixString(16);
-        order = OrderModel(
-          id: localId,
-          fecha: DateTime.now().toString().substring(0, 16),
-          total: total,
-          estadoPedido: OrderStatusConstants.recibido,
-          estadoPago: (metodoPago == PaymentMethodConstants.wompi)
-              ? PaymentStatusConstants.pagado
-              : PaymentStatusConstants.pendienteContraentrega,
-          metodoPago: metodoPago,
-          direccion: direccion,
-          barrio: barrio,
-          carpa: carpa,
-          telefono: telefono,
-          items: List.from(items),
-        );
+        _errorMessage = res.message ?? 'No fue posible crear el pedido.';
+        _isLoading = false;
+        notifyListeners();
+        return null;
       }
-
-      _lastCreatedOrder = order;
-      _userOrders.insert(0, order);
-      _isLoading = false;
-      notifyListeners();
-      return order;
-    } catch (e) {
-      _errorMessage = 'Error al crear pedido: $e';
+    } catch (_) {
+      _errorMessage = 'Error de conexión al procesar el pedido.';
       _isLoading = false;
       notifyListeners();
       return null;
@@ -119,15 +123,15 @@ class OrderProvider extends ChangeNotifier {
   }
 
   Future<WompiInitData?> initWompiPayment({
+    required String orderId,
     required double amount,
-    required String reference,
   }) async {
     try {
       final res = await ApiClient.get<Map<String, dynamic>>(
         ApiEndpoints.paymentWompiInit,
         queryParameters: {
-          'amount': amount,
-          'reference': reference,
+          'ordenId': orderId,
+          'valor': amount,
         },
       );
 
@@ -136,27 +140,26 @@ class OrderProvider extends ChangeNotifier {
       }
     } catch (_) {}
 
-    // Fallback sandbox
     return WompiInitData(
-      reference: reference,
+      reference: 'WOMPI_${DateTime.now().millisecondsSinceEpoch}',
       amountInCents: (amount * 100).toInt(),
       currency: 'COP',
-      publicKey: 'pub_test_wQdG7hGgqZc6hK7v9b8a1c2d3e4f5a6b',
-      signature: 'simulated_wompi_signature_${reference.hashCode}',
+      publicKey: EnvConfig.wompiPublicKey,
+      signature: 'wompi_signature',
     );
   }
 
   Future<WompiVerificationResult> verifyWompiPayment({
     required String transactionId,
-    required String reference,
+    required String orderId,
     required String status,
   }) async {
     try {
       final res = await ApiClient.post<Map<String, dynamic>>(
         ApiEndpoints.paymentWompiVerify,
         body: {
-          'transactionId': transactionId,
-          'reference': reference,
+          'transaccionId': transactionId,
+          'ordenId': orderId,
           'status': status,
         },
       );
@@ -169,65 +172,9 @@ class OrderProvider extends ChangeNotifier {
     return WompiVerificationResult(
       status: status,
       message: status.toUpperCase() == 'APPROVED'
-          ? 'Pago Wompi procesado con éxito'
-          : 'Transacción rechazada por el banco emisor',
+          ? 'Pago procesado exitosamente.'
+          : 'Transacción no aprobada por la entidad financiera.',
+      orderId: orderId,
     );
-  }
-
-  List<OrderModel> _getDemoOrders() {
-    return [
-      OrderModel(
-        id: '6afbdeef761ca933d203e4d0',
-        fecha: '16-11-2026 23:58',
-        total: 33000.0,
-        estadoPedido: OrderStatusConstants.recibido,
-        estadoPago: PaymentStatusConstants.pagado,
-        metodoPago: PaymentMethodConstants.wompi,
-        direccion: 'Frente al Kiosco El Bony',
-        barrio: 'Bocagrande',
-        carpa: 14,
-        telefono: '3232542588',
-        items: [
-          CartItemModel(
-            id: '1',
-            productoId: '1',
-            nombre: 'Hamburguesa de la casa',
-            precio: 25000,
-            cantidad: 1,
-            assetFallback: 'assets/images/Burguer.jpg',
-          ),
-          CartItemModel(
-            id: '3',
-            productoId: '3',
-            nombre: 'Cerveza nacional fría',
-            precio: 7000,
-            cantidad: 1,
-            assetFallback: 'assets/images/Bebidas.jpeg',
-          ),
-        ],
-      ),
-      OrderModel(
-        id: '6afbdac3761ca933d203e4c3',
-        fecha: '16-11-2026 23:40',
-        total: 17000.0,
-        estadoPedido: OrderStatusConstants.enPreparacion,
-        estadoPago: PaymentStatusConstants.pendienteContraentrega,
-        metodoPago: PaymentMethodConstants.efectivo,
-        direccion: 'Bahía Castillo frente al muelle',
-        barrio: 'Castillogrande',
-        carpa: 5,
-        telefono: '3001234567',
-        items: [
-          CartItemModel(
-            id: '4',
-            productoId: '4',
-            nombre: 'Limonada de coco',
-            precio: 14000,
-            cantidad: 1,
-            assetFallback: 'assets/images/Bebidas.jpeg',
-          ),
-        ],
-      ),
-    ];
   }
 }

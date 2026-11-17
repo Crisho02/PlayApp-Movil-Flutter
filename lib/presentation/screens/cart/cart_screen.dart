@@ -1,30 +1,13 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/currency_formatter.dart';
-import '../../../data/models/cart_item_model.dart';
+import '../../../core/utils/image_helper.dart';
 import '../../../providers/cart_provider.dart';
 import '../../widgets/custom_app_bar.dart';
 
 class CartScreen extends StatelessWidget {
   const CartScreen({super.key});
-
-  Widget _buildItemImage(CartItemModel item) {
-    if (item.imagenSrc != null && item.imagenSrc!.contains(',')) {
-      try {
-        final bytes = base64Decode(item.imagenSrc!.split(',').last);
-        return Image.memory(bytes, fit: BoxFit.cover);
-      } catch (_) {}
-    }
-    if (item.assetFallback != null) {
-      return Image.asset(item.assetFallback!, fit: BoxFit.cover);
-    }
-    if (item.imagenUrl != null && item.imagenUrl!.startsWith('http')) {
-      return Image.network(item.imagenUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Image.asset(AppAssets.placeholder));
-    }
-    return Image.asset(AppAssets.placeholder, fit: BoxFit.cover);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +78,7 @@ class CartScreen extends StatelessWidget {
                           border: Border.all(color: AppColors.sandBorder),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
+                              color: Colors.black.withValues(alpha: 0.02),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -108,7 +91,13 @@ class CartScreen extends StatelessWidget {
                               child: SizedBox(
                                 width: 70,
                                 height: 70,
-                                child: _buildItemImage(item),
+                                child: ImageHelper.buildProductImage(
+                                  imageSrc: item.imagenSrc,
+                                  imageUrl: item.imagenUrl,
+                                  productId: item.productoId,
+                                  assetFallback: item.assetFallback,
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -202,7 +191,7 @@ class CartScreen extends StatelessWidget {
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
+                        color: Colors.black.withValues(alpha: 0.06),
                         blurRadius: 16,
                         offset: const Offset(0, -4),
                       ),

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/order_model.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/order_provider.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/order_detail_modal.dart';
@@ -22,24 +23,80 @@ class _OrderListScreenState extends State<OrderListScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<OrderProvider>(context, listen: false).fetchUserOrders();
+      final user = Provider.of<AuthProvider>(context, listen: false).currentUser;
+      if (user != null) {
+        Provider.of<OrderProvider>(context, listen: false).fetchUserOrders(user.email);
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final auth = Provider.of<AuthProvider>(context);
+    final user = auth.currentUser;
     final orderProv = Provider.of<OrderProvider>(context);
+
+    if (user == null) {
+      return Scaffold(
+        appBar: const CustomAppBar(title: 'Mis Pedidos'),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: const BoxDecoration(
+                    color: AppColors.sandBackground,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.receipt_long_outlined,
+                    size: 64,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Inicia sesión para ver tus pedidos',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.deepNavy,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Consulta el estado de preparación y entrega de tus pedidos en la playa.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: AppColors.textMuted),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.pushNamed(context, '/login'),
+                  icon: const Icon(Icons.login, size: 18),
+                  label: const Text('Iniciar Sesión'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     List<OrderModel> filteredOrders = orderProv.userOrders;
     if (_filter == 'ACTIVOS') {
       filteredOrders = filteredOrders
           .where((o) =>
-              o.estadoPedido == OrderStatusConstants.recibido ||
-              o.estadoPedido == OrderStatusConstants.enPreparacion)
+              o.estadoPedido.toLowerCase().contains('recibido') ||
+              o.estadoPedido.toLowerCase().contains('preparaci'))
           .toList();
     } else if (_filter == 'TERMINADOS') {
       filteredOrders = filteredOrders
-          .where((o) => o.estadoPedido == OrderStatusConstants.terminado)
+          .where((o) =>
+              o.estadoPedido.toLowerCase().contains('terminado') ||
+              o.estadoPedido.toLowerCase().contains('entregado'))
           .toList();
     }
 
@@ -65,7 +122,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
           // Lista de pedidos
           Expanded(
             child: RefreshIndicator(
-              onRefresh: () => orderProv.fetchUserOrders(),
+              onRefresh: () => orderProv.fetchUserOrders(user.email),
               color: AppColors.primary,
               child: Builder(
                 builder: (context) {
@@ -157,7 +214,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
         border: Border.all(color: AppColors.sandBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -223,7 +280,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 const Divider(height: 1),
                 const SizedBox(height: 12),
 
-                // Fila Inferior: Total y Detalles
+                // Fila Inferior: Total y Enlace profesional "Ver detalles"
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -247,15 +304,15 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     Row(
                       children: const [
                         Text(
-                          'Ver detalle modal',
+                          'Ver detalles',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
+                            color: AppColors.primaryDark,
                           ),
                         ),
                         SizedBox(width: 4),
-                        Icon(Icons.chevron_right, size: 16, color: AppColors.primary),
+                        Icon(Icons.chevron_right, size: 18, color: AppColors.primaryDark),
                       ],
                     ),
                   ],

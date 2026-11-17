@@ -1,3 +1,5 @@
+import '../../core/config/env_config.dart';
+
 class ProductModel {
   final String id;
   final String nombre;
@@ -24,21 +26,30 @@ class ProductModel {
   });
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
+    final prodId = json['id']?.toString() ?? '';
+    final rawStock = json['stock'] ?? json['cantidadDisponible'] ?? 0;
+    final stockInt = (rawStock is num) ? rawStock.toInt() : 0;
+
+    final rawCat = json['categoria'] ?? json['categoriaId'] ?? json['tipo'] ?? 1;
+    final catId = (rawCat is num) ? rawCat.toInt() : 1;
+
+    final rawImageSrc = json['imageSRC']?.toString() ?? json['imagenSrc']?.toString();
+    final hasImg = json['hasCustomImage'] == true || json['hasImage'] == true || (rawImageSrc != null && rawImageSrc.isNotEmpty);
+
+    final rawImgUrl = json['imagenUrl']?.toString() ??
+        (hasImg && prodId.isNotEmpty ? '${EnvConfig.apiBaseUrl}/api/products/$prodId/image' : null);
+
     return ProductModel(
-      id: json['id']?.toString() ?? '',
-      nombre: json['nombre']?.toString() ?? 'Producto',
+      id: prodId,
+      nombre: json['nombre']?.toString() ?? 'Producto de Playa',
       descripcion: json['descripcion']?.toString() ?? '',
       precio: (json['precio'] is num) ? (json['precio'] as num).toDouble() : 0.0,
-      cantidadDisponible: (json['cantidadDisponible'] is num)
-          ? (json['cantidadDisponible'] as num).toInt()
-          : 0,
-      categoriaId: (json['categoriaId'] is num)
-          ? (json['categoriaId'] as num).toInt()
-          : 1,
-      categoriaNombre: json['categoriaNombre']?.toString() ?? 'Comidas',
-      hasImage: json['hasImage'] == true,
-      imagenUrl: json['imagenUrl']?.toString(),
-      imagenSrc: json['imagenSrc']?.toString(),
+      cantidadDisponible: stockInt,
+      categoriaId: catId,
+      categoriaNombre: json['categoriaNombre']?.toString() ?? (catId == 2 ? 'Bebida' : (catId == 3 ? 'Servicio' : 'Comida')),
+      hasImage: hasImg,
+      imagenUrl: rawImgUrl,
+      imagenSrc: rawImageSrc,
     );
   }
 
@@ -48,11 +59,14 @@ class ProductModel {
       'nombre': nombre,
       'descripcion': descripcion,
       'precio': precio,
+      'stock': cantidadDisponible,
       'cantidadDisponible': cantidadDisponible,
+      'categoria': categoriaId,
       'categoriaId': categoriaId,
       'categoriaNombre': categoriaNombre,
       'hasImage': hasImage,
       'imagenUrl': imagenUrl,
+      'imageSRC': imagenSrc,
       'imagenSrc': imagenSrc,
     };
   }
@@ -86,6 +100,6 @@ class ProductModel {
     if (lower.contains('patacon')) {
       return 'assets/images/catalogo/patacones-hogao.jpg';
     }
-    return null;
+    return 'assets/images/blank-product.jpg';
   }
 }

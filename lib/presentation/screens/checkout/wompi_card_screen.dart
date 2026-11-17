@@ -61,20 +61,21 @@ class _WompiCardScreenState extends State<WompiCardScreen> {
     final total = widget.checkoutData['total'] as double;
     final shipmentData = widget.checkoutData['shipmentData'] as Map<String, dynamic>;
     final items = widget.checkoutData['items'] as List<CartItemModel>;
+    final correo = widget.checkoutData['correo'] as String?;
 
     final cardNum = _cardNumberCtrl.text.replaceAll(' ', '').trim();
     final isApprovedCard = cardNum.startsWith('4242') || !cardNum.startsWith('4111');
 
     // Inicializar pago en backend
-    final reference = 'WOMPI_${DateTime.now().millisecondsSinceEpoch}';
-    await orderProv.initWompiPayment(amount: total, reference: reference);
+    final tempOrderId = 'ORD_${DateTime.now().millisecondsSinceEpoch}';
+    await orderProv.initWompiPayment(orderId: tempOrderId, amount: total);
 
     // Simular o verificar transacción con el backend
     await Future.delayed(const Duration(milliseconds: 1200));
 
     final verification = await orderProv.verifyWompiPayment(
       transactionId: 'TX_${DateTime.now().millisecondsSinceEpoch}',
-      reference: reference,
+      orderId: tempOrderId,
       status: isApprovedCard ? 'APPROVED' : 'DECLINED',
     );
 
@@ -83,6 +84,7 @@ class _WompiCardScreenState extends State<WompiCardScreen> {
     if (verification.isApproved) {
       // Crear pedido pagado
       final order = await orderProv.createOrder(
+        correo: correo ?? '',
         metodoPago: PaymentMethodConstants.wompi,
         direccion: shipmentData['direccion'] ?? 'Sector playa',
         barrio: shipmentData['barrio'] ?? 'Bocagrande',

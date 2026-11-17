@@ -5,6 +5,7 @@ import 'package:playapp_movil_flutter/core/constants/app_constants.dart';
 import 'package:playapp_movil_flutter/core/utils/currency_formatter.dart';
 import 'package:playapp_movil_flutter/data/models/order_model.dart';
 import 'package:playapp_movil_flutter/data/models/product_model.dart';
+import 'package:playapp_movil_flutter/data/models/review_model.dart';
 import 'package:playapp_movil_flutter/data/models/user_model.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/product_card.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/status_badge.dart';
@@ -122,9 +123,39 @@ void main() {
       prov.setSortBy('price_asc');
       expect(prov.sortBy, 'price_asc');
     });
+
+    test('ReviewModel parses MongoDB Atlas response and formats Spanish date', () {
+      final json = {
+        'id': '67b36f73a5a22830fcfd1933',
+        'nombre': 'Walter Espriella',
+        'comentario': 'Excelente comida y atención rápida',
+        'valoracion': 5,
+        'fecha': '2026-05-22T20:44:00.000Z',
+      };
+      final review = ReviewModel.fromJson(json);
+      expect(review.id, '67b36f73a5a22830fcfd1933');
+      expect(review.nombreCliente, 'Walter Espriella');
+      expect(review.calificacion, 5);
+      expect(review.fechaFormateada.contains('mayo'), isTrue);
+      expect(review.fechaFormateada.contains('2026'), isTrue);
+    });
+
+    test('ReviewModel toJson matches backend POST /api/reviews schema', () {
+      final review = ReviewModel(
+        id: 'rev_1',
+        nombreCliente: 'Catalina Garcia',
+        calificacion: 5,
+        comentario: 'La mejor experiencia de playa',
+        fechaFormateada: 'Hoy',
+      );
+      final json = review.toJson();
+      expect(json['nombre'], 'Catalina Garcia');
+      expect(json['valoracion'], 5);
+      expect(json['comentario'], 'La mejor experiencia de playa');
+    });
   });
 
-  group('Widget Tests: Reusable Components', () {
+  group('Widget Tests: Reusable Components & Responsiveness', () {
     testWidgets('StatusBadge displays label and circle indicator', (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -180,5 +211,46 @@ void main() {
       await tester.pump();
       expect(addedQty, 2);
     });
+
+    for (final width in [320.0, 375.0, 390.0, 414.0]) {
+      testWidgets('ProductCard renders without RenderFlex overflow at ${width.toInt()}px width', (WidgetTester tester) async {
+        tester.view.physicalSize = Size(width, 800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        final product = ProductModel(
+          id: 'test_overflow',
+          nombre: 'Hamburguesa de la casa con tocineta',
+          descripcion: 'Carne artesanal y papas a la francesa en la playa',
+          precio: 25000.0,
+          cantidadDisponible: 10,
+          categoriaId: 1,
+          categoriaNombre: 'Comidas',
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.60,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                ),
+                itemCount: 2,
+                itemBuilder: (ctx, i) => ProductCard(
+                  product: product,
+                  onAddToCart: (_) {},
+                ),
+              ),
+            ),
+          ),
+        );
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Hamburguesa de la casa con tocineta'), findsNWidgets(2));
+      });
+    }
   });
 }
