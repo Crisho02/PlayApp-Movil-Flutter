@@ -52,7 +52,11 @@ class CartScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     ElevatedButton.icon(
                       onPressed: () {
-                        Navigator.pushNamedAndRemoveUntil(context, '/main', (route) => false);
+                        Navigator.pushNamedAndRemoveUntil(
+                          context,
+                          '/shop',
+                          (route) => false,
+                        );
                       },
                       icon: const Icon(Icons.storefront, size: 20),
                       label: const Text('Explorar Tienda'),

@@ -16,9 +16,12 @@ class ShipmentScreen extends StatefulWidget {
 class _ShipmentScreenState extends State<ShipmentScreen> {
   final _formKey = GlobalKey<FormState>();
   String _selectedZone = 'Bocagrande (Kiosco El Bony)';
+  final _addressCtrl = TextEditingController(text: 'Cra. 1 frente a Kiosco El Bony, Bocagrande');
   final _carpaCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
+  double _latitud = 10.3997;
+  double _longitud = -75.5562;
 
   @override
   void initState() {
@@ -32,6 +35,7 @@ class _ShipmentScreenState extends State<ShipmentScreen> {
 
   @override
   void dispose() {
+    _addressCtrl.dispose();
     _carpaCtrl.dispose();
     _notesCtrl.dispose();
     _phoneCtrl.dispose();
@@ -46,10 +50,14 @@ class _ShipmentScreenState extends State<ShipmentScreen> {
       '/checkout-payment',
       arguments: {
         'barrio': _selectedZone,
-        'direccion': _notesCtrl.text.isNotEmpty ? _notesCtrl.text : 'Sector playa $_selectedZone',
+        'direccion': _addressCtrl.text.isNotEmpty
+            ? _addressCtrl.text
+            : 'Sector playa $_selectedZone',
         'carpa': int.tryParse(_carpaCtrl.text) ?? 1,
         'telefono': _phoneCtrl.text,
         'notas': _notesCtrl.text,
+        'latitud': _latitud,
+        'longitud': _longitud,
       },
     );
   }
@@ -77,12 +85,34 @@ class _ShipmentScreenState extends State<ShipmentScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Widget de selección de playa y mapa interactivo
+              // Widget de selección de playa y mapa interactivo de Bocagrande
               BeachMapWidget(
                 selectedZone: _selectedZone,
                 onZoneChanged: (zone) => setState(() => _selectedZone = zone),
                 carpaController: _carpaCtrl,
                 notesController: _notesCtrl,
+                addressController: _addressCtrl,
+                onLocationChanged: (lat, lng) {
+                  _latitud = lat;
+                  _longitud = lng;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Punto de Entrega / Dirección en Playa
+              TextFormField(
+                controller: _addressCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Punto de Entrega / Dirección en Playa',
+                  hintText: 'Ej: Frente a Hotel Caribe, sector carpas azules',
+                  prefixIcon: Icon(Icons.place_outlined, size: 20),
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Ingresa o marca en el mapa un punto de entrega válido';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
 

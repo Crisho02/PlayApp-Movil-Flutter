@@ -51,6 +51,7 @@ class PlayAppMovil extends StatelessWidget {
         routes: {
           '/': (context) => const SplashScreen(),
           '/main': (context) => const MainShell(),
+          '/shop': (context) => const MainShell(initialTab: 1),
           '/login': (context) => const LoginScreen(),
           '/register': (context) => const RegisterScreen(),
           '/cart': (context) => const CartScreen(),
@@ -59,6 +60,17 @@ class PlayAppMovil extends StatelessWidget {
           '/admin': (context) => const AdminDashboardScreen(),
         },
         onGenerateRoute: (settings) {
+          if (settings.name == '/main') {
+            final tab = (settings.arguments is int) ? (settings.arguments as int) : 0;
+            return MaterialPageRoute(
+              builder: (context) => MainShell(initialTab: tab),
+            );
+          }
+          if (settings.name == '/shop') {
+            return MaterialPageRoute(
+              builder: (context) => const MainShell(initialTab: 1),
+            );
+          }
           if (settings.name == '/product-detail') {
             final product = settings.arguments as ProductModel;
             return MaterialPageRoute(

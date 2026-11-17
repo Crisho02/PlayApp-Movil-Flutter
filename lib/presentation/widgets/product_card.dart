@@ -107,7 +107,7 @@ class _ProductCardState extends State<ProductCard> {
 
               // Contenido con textos flexibles y límites para prevenir overflows
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -123,7 +123,7 @@ class _ProductCardState extends State<ProductCard> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
                       CurrencyFormatter.formatCOP(p.precio),
                       style: const TextStyle(
@@ -134,7 +134,7 @@ class _ProductCardState extends State<ProductCard> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
                       p.isAvailable
                           ? 'Disponible: ${p.cantidadDisponible}'
@@ -147,7 +147,7 @@ class _ProductCardState extends State<ProductCard> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
 
                     // Selector de cantidad y botón agregar responsive
                     Row(

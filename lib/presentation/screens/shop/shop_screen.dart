@@ -4,7 +4,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../providers/cart_provider.dart';
 import '../../../providers/product_provider.dart';
 import '../../widgets/custom_app_bar.dart';
-import '../../widgets/product_card.dart';
+import '../../widgets/responsive_product_grid.dart';
 
 class ShopScreen extends StatelessWidget {
   const ShopScreen({super.key});
@@ -140,27 +140,14 @@ class ShopScreen extends StatelessWidget {
                     );
                   }
 
-                  return GridView.builder(
-                    padding: const EdgeInsets.all(14),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.60,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                    ),
-                    itemCount: products.length,
-                    itemBuilder: (context, index) {
-                      final product = products[index];
-                      return ProductCard(
-                        product: product,
-                        onAddToCart: (qty) => cartProv.addToCart(product, quantity: qty),
-                        onTap: () {
-                          Navigator.pushNamed(
-                            context,
-                            '/product-detail',
-                            arguments: product,
-                          );
-                        },
+                  return ResponsiveProductGrid(
+                    products: products,
+                    onAddToCart: (product, qty) => cartProv.addToCart(product, quantity: qty),
+                    onTapProduct: (product) {
+                      Navigator.pushNamed(
+                        context,
+                        '/product-detail',
+                        arguments: product,
                       );
                     },
                   );

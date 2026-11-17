@@ -7,10 +7,16 @@ import 'package:playapp_movil_flutter/data/models/order_model.dart';
 import 'package:playapp_movil_flutter/data/models/product_model.dart';
 import 'package:playapp_movil_flutter/data/models/review_model.dart';
 import 'package:playapp_movil_flutter/data/models/user_model.dart';
+import 'package:playapp_movil_flutter/presentation/screens/cart/cart_screen.dart';
+import 'package:playapp_movil_flutter/presentation/screens/checkout/wompi_card_screen.dart';
+import 'package:playapp_movil_flutter/presentation/widgets/beach_map_widget.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/product_card.dart';
+import 'package:playapp_movil_flutter/presentation/widgets/responsive_product_grid.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/status_badge.dart';
 import 'package:playapp_movil_flutter/providers/cart_provider.dart';
+import 'package:playapp_movil_flutter/providers/order_provider.dart';
 import 'package:playapp_movil_flutter/providers/product_provider.dart';
+import 'package:provider/provider.dart';
 
 void main() {
   group('Unit Tests: Currency & Config', () {
@@ -252,5 +258,138 @@ void main() {
         expect(find.text('Hamburguesa de la casa con tocineta'), findsNWidgets(2));
       });
     }
+
+    for (final width in [320.0, 375.0, 768.0, 1200.0]) {
+      testWidgets('ResponsiveProductGrid adapts columns and does not overflow at ${width.toInt()}px width', (WidgetTester tester) async {
+        tester.view.physicalSize = Size(width, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        final sampleProducts = [
+          ProductModel(
+            id: 'p1',
+            nombre: 'Arepa de Huevo Tradicional',
+            descripcion: 'Deliciosa arepa con huevo de Cartagena',
+            precio: 9000.0,
+            cantidadDisponible: 20,
+            categoriaId: 1,
+            categoriaNombre: 'Comidas',
+          ),
+          ProductModel(
+            id: 'p2',
+            nombre: 'Arroz de Coco con Pescado',
+            descripcion: 'Plato típico costeño frente al mar',
+            precio: 35000.0,
+            cantidadDisponible: 15,
+            categoriaId: 1,
+            categoriaNombre: 'Comidas',
+          ),
+        ];
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ResponsiveProductGrid(
+                products: sampleProducts,
+                onAddToCart: (_, __) {},
+              ),
+            ),
+          ),
+        );
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Arepa de Huevo Tradicional'), findsOneWidget);
+        expect(find.text('Arroz de Coco con Pescado'), findsOneWidget);
+      });
+    }
+  });
+
+  group('Widget Tests: Navigation & Checkout Cleanliness', () {
+    testWidgets('Empty cart displays Explorar Tienda button and clean message', (WidgetTester tester) async {
+      final cart = CartProvider();
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: cart),
+          ],
+          child: const MaterialApp(
+            home: CartScreen(),
+          ),
+        ),
+      );
+
+      expect(find.text('Tu carrito está vacío'), findsOneWidget);
+      expect(find.text('Explorar Tienda'), findsOneWidget);
+      expect(find.byIcon(Icons.storefront), findsOneWidget);
+    });
+
+    testWidgets('WompiCardScreen displays clean professional UI without sandbox references', (WidgetTester tester) async {
+      final orderProv = OrderProvider();
+      final cart = CartProvider();
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: orderProv),
+            ChangeNotifierProvider.value(value: cart),
+          ],
+          child: const MaterialApp(
+            home: WompiCardScreen(
+              checkoutData: {
+                'total': 45000.0,
+                'shipmentData': {
+                  'direccion': 'Playa Bocagrande',
+                  'barrio': 'Bocagrande (Kiosco El Bony)',
+                  'carpa': 12,
+                },
+                'items': [],
+                'correo': 'turista@playapp.com',
+              },
+            ),
+          ),
+        ),
+      );
+
+      // Debe mostrar título profesional
+      expect(find.text('Pagar con Tarjeta'), findsOneWidget);
+      expect(find.text('Datos de la Tarjeta'), findsOneWidget);
+      expect(find.text('Total a Pagar:'), findsOneWidget);
+
+      // NO debe contener palabras técnicas de entorno ni números prellenados de prueba
+      expect(find.textContaining('Sandbox'), findsNothing);
+      expect(find.textContaining('Tarjetas de prueba'), findsNothing);
+      expect(find.textContaining('Aprobada (4242)'), findsNothing);
+      expect(find.textContaining('Rechazada (4111)'), findsNothing);
+      expect(find.text('4242424242424242'), findsNothing);
+    });
+
+    testWidgets('BeachMapWidget renders Bocagrande beach sectors and interactive map controls', (WidgetTester tester) async {
+      final carpaCtrl = TextEditingController();
+      final notesCtrl = TextEditingController();
+      final addressCtrl = TextEditingController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: BeachMapWidget(
+                selectedZone: 'Bocagrande (Kiosco El Bony)',
+                onZoneChanged: (_) {},
+                carpaController: carpaCtrl,
+                notesController: notesCtrl,
+                addressController: addressCtrl,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Zona de Entrega en Playa'), findsOneWidget);
+      expect(find.text('Bocagrande (Kiosco El Bony)'), findsOneWidget);
+      expect(find.text('Bocagrande Central (Hotel Caribe)'), findsOneWidget);
+      expect(find.text('N° Carpa / Mesa'), findsOneWidget);
+      expect(find.text('Referencia / Toalla'), findsOneWidget);
+    });
   });
 }

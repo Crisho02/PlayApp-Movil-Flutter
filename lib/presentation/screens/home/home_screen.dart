@@ -5,7 +5,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../providers/cart_provider.dart';
 import '../../../providers/product_provider.dart';
 import '../../widgets/custom_app_bar.dart';
-import '../../widgets/product_card.dart';
+import '../../widgets/responsive_product_grid.dart';
 
 class HomeScreen extends StatefulWidget {
   final Function(int tabIndex)? onNavigateTab;
@@ -390,33 +390,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     return const Center(child: Text('No hay productos disponibles'));
                   }
 
-                  return Padding(
+                  return ResponsiveProductGrid(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 0.60,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                      ),
-                      itemCount: featured.length,
-                      itemBuilder: (context, idx) {
-                        final product = featured[idx];
-                        return ProductCard(
-                          product: product,
-                          onAddToCart: (qty) => cartProv.addToCart(product, quantity: qty),
-                          onTap: () {
-                            Navigator.pushNamed(
-                              context,
-                              '/product-detail',
-                              arguments: product,
-                            );
-                          },
-                        );
-                      },
-                    ),
+                    products: featured,
+                    onAddToCart: (product, qty) => cartProv.addToCart(product, quantity: qty),
+                    onTapProduct: (product) {
+                      Navigator.pushNamed(
+                        context,
+                        '/product-detail',
+                        arguments: product,
+                      );
+                    },
                   );
                 },
               ),
