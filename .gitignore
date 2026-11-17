@@ -12,16 +12,24 @@
 .swiftpm/
 migrate_working_dir/
 
+# Environment & Secrets
+.env
+*.env
+!*.env.example
+application-secrets.env
+*.key
+*.pem
+
 # IntelliJ related
 *.iml
 *.ipr
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# Backend temporary & tools
+backend/target/
+backend/.tools/
+backend/**/target/
 
 # Flutter/Dart/Pub related
 **/doc/api/

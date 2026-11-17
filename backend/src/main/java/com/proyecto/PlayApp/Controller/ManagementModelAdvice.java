@@ -1,0 +1,51 @@
+package com.proyecto.PlayApp.Controller;
+
+import com.proyecto.PlayApp.entity.Usuario;
+import com.proyecto.PlayApp.service.UsuarioService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ModelAttribute;
+
+import java.security.Principal;
+
+@ControllerAdvice(assignableTypes = ManagementController.class)
+@RequiredArgsConstructor
+public class ManagementModelAdvice {
+
+    private final UsuarioService usuarios;
+
+    @Value("${playapp.admin.email:adminplayapp01@gmail.com}")
+    private String adminGlobalCorreo;
+
+    @ModelAttribute
+    public void addAdminDisplayName(Model model, Principal principal) {
+        if (principal == null || principal.getName() == null) {
+            return;
+        }
+
+        String correo = principal.getName();
+        Usuario usuario = usuarios.buscarUsuario(correo);
+        String nombre = usuario != null ? usuario.getNombreCompleto() : null;
+
+        if (nombre == null || nombre.isBlank()) {
+            int atIndex = correo.indexOf('@');
+            nombre = atIndex > 0 ? correo.substring(0, atIndex) : correo;
+        }
+
+        model.addAttribute("nombreAdmin", nombre);
+        model.addAttribute("rolAdmin", nombreRol(usuario));
+        model.addAttribute("adminGlobal", adminGlobalCorreo.equalsIgnoreCase(correo));
+    }
+
+    private String nombreRol(Usuario usuario) {
+        if (usuario == null || usuario.getRol() == null) {
+            return "Usuario";
+        }
+        if ("ROLE_ADMIN".equals(usuario.getRol())) {
+            return "Administrador";
+        }
+        return "Usuario";
+    }
+}

@@ -1,78 +1,147 @@
-# PlayApp-Movil-Flutter
+# PlayApp Móvil (Flutter) - Cartagena de Indias 🏖️
 
-PlayApp Móvil — Aplicación móvil en **Flutter** desarrollada a partir del proyecto universitario **PlayApp** (Spring Boot 3 + Java 21 + MongoDB Atlas + Mercado Pago + Weka).
-
-Diseñada con enfoque **mobile-first**, conectada directamente a la **misma base de datos MongoDB Atlas** y con la **pasarela de datos y de pagos** completa para playas de Cartagena de Indias, Colombia.
+Aplicación móvil oficial de **PlayApp**, desarrollada en **Flutter (Android & iOS)** con arquitectura limpia y moderna, conservando el 100% de la lógica de negocio, catálogo playero, flujos de pedido y sistema de diseño costero de la versión web.
 
 ---
 
-## 🚀 Características Principales
+## 📱 Características Principales
 
-### 1. Pasarela de Datos & Misma Base de Datos MongoDB Atlas (`playappdb`)
-- **Conexión Directa:** Conectado al cluster oficial MongoDB Atlas del proyecto universitario:
-  `mongodb+srv://playapp_user:PlayAppadmin123@playapp-prod.0ibspwi.mongodb.net/playappdb?retryWrites=true&w=majority`
-- **Colecciones sincronizadas bidireccionalmente:**
-  - `productos`: Catálogo con imágenes binarias, categorías (Comida, Bebida, Servicio) y stock en playa.
-  - `entidades`: Usuarios y administradores/restaurantes con hash seguro **BCrypt** compatible con Spring Security.
-  - `pedidos`: Órdenes completas con carritos, estado operativo (`Recibido`, `En preparación`, `Terminado`) y datos de entrega.
-  - `reseñas`: Calificaciones 1–5 estrellas y opiniones en playa.
-  - `mensajes_contacto`: Mensajes de reservación, sugerencia o consulta para Kiosco El Bony.
-  - `chat_messages` y `chat_sessions`: Historial de consultas del asistente de playa.
-- **Tolerancia y Modo Offline:** Si no hay conectividad o en entornos restringidos, conmuta automáticamente a caché local reactiva sin interrupciones ni bloqueos.
-- **Hoja de Estado de la Pasarela:** Botón interactivo en la barra superior para inspeccionar el estado de la conexión, ver conteo de documentos en tiempo real y forzar sincronización.
+1. **Inicio con Carrusel Interactivo & Propuesta de Valor:**
+   - Carrusel hero automático con platos destacados (*Hamburguesa de la casa*, *Pescado frito cartagenero*, *Bebidas heladas*).
+   - Propuesta de valor de PlayApp: precios justos oficiales, entregas sin sobrecostos en carpas de Cartagena y pagos seguros.
+   - Accesos directos a categorías: **Comidas**, **Bebidas** y **Servicios**.
 
-### 2. Pasarela de Pagos (Payment Gateway)
-- Fiel al flujo de `fake-payment-gateway.html` y `PaymentController.java`:
-  - **Mercado Pago:** Flujo de pago preferencial con modal móvil y verificación de orden.
-  - **Efectuar Pago (Aprobación inmediata):** Descuenta inventario en MongoDB, actualiza el estado de pago a `Terminado` y genera el comprobante digital.
-  - **Cancelar Pago:** Marca el pago como `Cancelado`, permitiendo reintentar desde el historial de pedidos (`user-orders.html`).
+2. **Tienda Playera & Búsqueda Avanzada:**
+   - Búsqueda en tiempo real por texto (comidas, bebidas, servicios).
+   - Filtros por categoría y ordenamiento (relevancia, menor precio, mayor precio, A-Z).
+   - Tarjetas de producto con fotos locales o remotas, estado de disponibilidad en tiempo real, contador de unidades y botón de agregado al carrito.
 
-### 3. Asistente Inteligente Costero Dual (Gemini AI + Motor de Intenciones)
-- Conexión directa a **Google Gemini REST API** (`gemini-1.5-flash`) con el prompt del sistema especializado en turismo de Cartagena, prevención de sobrecostos y recomendaciones locales.
-- **Motor determinista local (`ChatBotService`):** Respuestas instantáneas a preguntas sobre precios oficiales, limonada de coco, cerveza nacional, pescado frito y estado de compras.
+3. **Carrito de Compras & Desglose Transparente:**
+   - Modificación instantánea de cantidades o eliminación de ítems.
+   - Desglose detallado: Subtotal de productos, Tarifa de entrega a la playa (**$5.000 COP**) y Total general en pesos colombianos.
 
-### 4. Predicción de Ventas (Machine Learning Weka)
-- Fiel a `manager-prediccion.html`, `WekaPredictionService.java` y `dataset_ventas.arff`:
-  - Variables de entrada: Día de la semana, Producto (los 10 productos del dataset), Categoría, Precio, Clima (Soleado, Nublado, Lluvioso) y Temporada (Alta, Baja, Normal).
-  - Cálculo de demanda proyectada en unidades.
+4. **Entrega en Playa con Mapa Interactivo (Paso 1 Checkout):**
+   - Selector visual de playas en Cartagena: *Bocagrande (Kiosco El Bony)*, *Castillogrande (Bahía)*, *El Laguito (Hotel Hilton)*, *Marbella / Cabrero*.
+   - Mapa con radar costero y coordenadas.
+   - Campos dedicados para **N° de Carpa / Mesa** y notas de referencia (ej: *"sombrilla azul"*).
+   - Teléfono / WhatsApp de contacto del cliente.
 
-### 5. Interfaz Móvil y Experiencia de Usuario
-- **Inicio:** Carrusel de platos típicos, bienvenida con verificación de precios y mapa interactivo de zonas de playa.
-- **Tienda:** Búsqueda en vivo, filtrado por categorías, ordenamiento, detalle en Bottom Sheet y validación de existencias.
-- **Carrito & Entrega:** Selector de zona de playa (Bocagrande, Castillogrande, Marbella, Laguito), coordenadas GPS, Carpa/Mesa y método de pago.
-- **Historial de Pedidos:** Filtros por estado, badges de colores idénticos a los estilos CSS del proyecto Spring Boot y reintento de pago.
-- **Panel Administrativo:** Dashboard con métricas globales, gráficos móviles de ingresos, métodos de pago, productos más vendidos y control de catálogo (CRUD).
+5. **Métodos de Pago Modernizados (Paso 2 Checkout):**
+   - **Wompi (Bancolombia) [Recomendado]:** Tarjetas débito/crédito, Nequi, PSE y Botón Bancolombia en pasarela Sandbox.
+   - **Efectivo contraentrega:** *"Paga en efectivo cuando recibas tu pedido en la playa."*
+   - **Transferencia contraentrega:** *"Realiza la transferencia al recibir tu pedido."*
+   - *(Eliminado por completo cualquier modo simulado o demo local).*
+
+6. **Pasarela de Prueba Wompi Sandbox:**
+   - Formulario de tarjeta seguro con chips de prueba rápida:
+     - **Aprobada:** `4242 4242 4242 4242`
+     - **Rechazada:** `4111 1111 1111 1111`
+   - Firma y verificación criptográfica coordinada con el backend Spring Boot.
+
+7. **Ventana Modal de Detalle de Pedidos:**
+   - Lista moderna de pedidos con etiquetas de estado dinámicas.
+   - Ventana modal interactiva para clientes y administradores con desglose completo de productos, carpa, playa, método de pago y fecha.
+
+8. **Reseñas de la Comunidad & Contacto:**
+   - Calificación interactiva de 1 a 5 estrellas y publicación de opiniones de playa.
+   - Formulario de contacto directo y datos del punto de atención en Bocagrande (Cra 1, Kiosco El Bony).
+
+9. **Panel de Administración Completo (`ROLE_ADMIN`):**
+   - Validación estricta de permisos.
+   - Métricas en vivo: Total de ventas, pedidos totales, pendientes y entregados.
+   - Estimación de ocupación de playas (Bocagrande y Castillogrande) y clima en Cartagena.
+   - Gestión de pedidos: actualización de estado (*Recibido* ➔ *En preparación* ➔ *Terminado* ➔ *Cancelado*) y marcado como pagado.
+   - Gestión de productos (crear, editar precio/stock y eliminar platos).
 
 ---
 
-## 🔑 Credenciales Demo
+## 🏛️ Arquitectura & Seguridad
 
-| Rol | Correo | Contraseña |
-|---|---|---|
-| **Usuario / Cliente** | `cliente@playapp.co` | `1234` |
-| **Administrador / Restaurante** | `adminplayapp01@gmail.com` | `admin123` |
-| **Administrador Secundario** | `dondearri@gmail.com` | `1234` |
-
-*También es posible registrarse en tiempo real como nuevo Usuario o Administrador tanto en local como en MongoDB Atlas.*
+- **Clean Architecture:**
+  - `lib/core/`: configuración de entorno, temas Material 3, constantes, cliente HTTP y almacenamiento seguro de sesiones.
+  - `lib/data/models/`: modelos inmutables de datos (`UserModel`, `ProductModel`, `CartItemModel`, `OrderModel`, `ReviewModel`, `WompiInitData`).
+  - `lib/providers/`: gestión de estado reactiva con `Provider` (`AuthProvider`, `ProductProvider`, `CartProvider`, `OrderProvider`, `ReviewProvider`, `AdminProvider`).
+  - `lib/presentation/`: pantallas responsive organizadas por dominio y widgets reutilizables.
+- **Seguridad Garantizada:**
+  - La aplicación Flutter **no se conecta directamente a MongoDB Atlas**.
+  - Todas las operaciones pasan por la API REST del backend Spring Boot.
+  - No se exponen llaves privadas ni credenciales de base de datos en el cliente móvil.
+- **Copia Reproducible del Backend:**
+  - Incluido en la carpeta `backend/` con Maven Wrapper (`./mvnw`) y endpoints REST `/api/**` listos para ser levantados de manera autónoma.
 
 ---
 
-## 🛠️ Cómo Ejecutar
+## 🚀 Guía de Instalación y Ejecución
+
+### 1. Iniciar el Backend Spring Boot
+
+Asegúrate de contar con Java 21 y ejecuta:
 
 ```bash
-# 1. Clonar el repositorio
-git clone https://github.com/Crisho02/PlayApp-Movil-Flutter.git
-cd PlayApp-Movil-Flutter
+cd backend
+./mvnw spring-boot:run
+```
 
-# 2. Descargar dependencias
+*(En Windows puedes usar `mvnw.cmd spring-boot:run`)*. El servidor se iniciará en `http://localhost:8080`.
+
+### 2. Ejecutar la Aplicación Móvil en Flutter
+
+Desde la raíz del proyecto `PlayApp-Movil-Flutter`:
+
+```bash
+# Descargar dependencias
 flutter pub get
 
-# 3. Ejecutar en dispositivo / emulador / web / escritorio
+# Ejecutar análisis estático (0 errores garantizados)
+flutter analyze
+
+# Ejecutar pruebas unitarias y de widgets
+flutter test
+
+# Iniciar la app en tu emulador o dispositivo
 flutter run
 ```
 
-### Comandos de Verificación
+> **Tip de Conexión de Red:**
+> - En el **Emulador de Android**, la app se conecta automáticamente a `http://10.0.2.2:8080`.
+> - En **iOS Simulator / Web / Desktop**, se conecta a `http://localhost:8080`.
+> - Desde la pantalla de **Perfil y Configuración** puedes modificar la URL en cualquier momento sin recompilar.
+
+---
+
+## 🔑 Credenciales de Prueba
+
+- **Administrador:**
+  - Correo: `adminplayapp01@gmail.com`
+  - Contraseña: `admin123`
+  - Rol: `ROLE_ADMIN` *(Habilita pestaña y accesos al panel de administración)*
+- **Tarjetas Wompi Sandbox:**
+  - Aprobada: `4242 4242 4242 4242` | Vence: `12/28` | CVC: `123`
+  - Rechazada: `4111 1111 1111 1111` | Vence: `06/27` | CVC: `999`
+
+---
+
+## 🧪 Pruebas Automatizadas
+
+El proyecto incluye pruebas completas en `test/widget_test.dart`:
+- Formateo de moneda colombiana (COP).
+- Lógica de carrito: cálculo de subtotales, adición de tarifa fija de playa ($5.000 COP) y vaciado.
+- Modelos de datos: mapeo de roles de usuario y etiquetas de pedidos.
+- Componentes de interfaz: insignias de estado dinámicas y tarjeta de producto con selectores de cantidad.
+
+Ejecutar pruebas:
 ```bash
-flutter analyze
 flutter test
 ```
+*Resultado: `All tests passed! (10/10)`*
+
+---
+
+## 🌴 Identidad Visual
+
+- **Ocean Dark:** `#075985`
+- **Primary Sky:** `#0284C7`
+- **Turquesa Caribe:** `#14B8A6`
+- **Arena de Playa:** `#F8F5EF`
+- **Coral PlayApp:** `#F97360`
+- **Deep Navy:** `#0C4A6E`

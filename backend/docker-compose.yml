@@ -1,0 +1,68 @@
+name: playapp-local
+
+services:
+  occupancy-model:
+    build:
+      context: .
+      dockerfile: ml/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8002:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+  mongo:
+    profiles: ["local-mongo"]
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "${PLAYAPP_MONGO_PORT:-27018}:27017"
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-playappdb}
+    volumes:
+      - playapp_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${PLAYAPP_REDIS_PORT:-6380}:6379"
+    volumes:
+      - playapp_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    profiles: ["app"]
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - ./config/application-secrets.env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      OCCUPANCY_MODEL_URL: http://occupancy-model:8001
+    depends_on:
+      redis:
+        condition: service_healthy
+      occupancy-model:
+        condition: service_started
+    ports:
+      - "${PLAYAPP_APP_PORT:-8080}:8080"
+
+volumes:
+  playapp_mongo_data:
+  playapp_redis_data:
