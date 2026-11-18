@@ -224,14 +224,14 @@ class _OrderDetailModalState extends State<OrderDetailModal> {
                         else
                           ...order.items.map(
                             (item) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
                               child: Row(
                                 children: [
                                   ClipRRect(
-                                    borderRadius: BorderRadius.circular(6),
+                                    borderRadius: BorderRadius.circular(8),
                                     child: SizedBox(
-                                      width: 38,
-                                      height: 38,
+                                      width: 44,
+                                      height: 44,
                                       child: ImageHelper.buildProductImage(
                                         imageSrc: item.imagenSrc,
                                         imageUrl: item.imagenUrl,
@@ -242,34 +242,32 @@ class _OrderDetailModalState extends State<OrderDetailModal> {
                                     ),
                                   ),
                                   const SizedBox(width: 10),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.turquoiseLight,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      '${item.cantidad}x',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12,
-                                        color: AppColors.turquoise,
-                                      ),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item.nombre,
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.deepNavy,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${item.cantidad}x · ${CurrencyFormatter.formatCOP(item.precio)} c/u',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.textMuted,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      item.nombre,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textMain,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
                                   Text(
                                     CurrencyFormatter.formatCOP(
                                       item.subtotal > 0
@@ -278,8 +276,8 @@ class _OrderDetailModalState extends State<OrderDetailModal> {
                                     ),
                                     style: const TextStyle(
                                       fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.deepNavy,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.primaryDark,
                                     ),
                                   ),
                                 ],

@@ -1,5 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_constants.dart';
@@ -875,6 +878,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   imageUrl: product.imageUrl,
                   imageSrc: product.imagenSrc,
                   productId: product.id,
+                  assetFallback: product.localAssetFallback,
                   fit: BoxFit.cover,
                 ),
               ),
@@ -946,12 +950,67 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
+  Future<void> _pickProductImage({
+    required BuildContext context,
+    required void Function(Uint8List bytes, String base64) onImagePicked,
+  }) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery);
+      if (picked == null) return;
+
+      final name = picked.name.toLowerCase();
+      final ext = name.contains('.') ? name.split('.').last : '';
+      if (!['jpg', 'jpeg', 'png', 'webp'].contains(ext)) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Formato no permitido. Por favor selecciona una imagen JPG, PNG o WebP.'),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+        }
+        return;
+      }
+
+      final bytes = await picked.readAsBytes();
+      if (bytes.lengthInBytes > 5 * 1024 * 1024) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('La imagen supera el límite de 5 MB permitido.'),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+        }
+        return;
+      }
+
+      final mime = ext == 'png'
+          ? 'image/png'
+          : (ext == 'webp' ? 'image/webp' : 'image/jpeg');
+      final base64Str = 'data:$mime;base64,${base64Encode(bytes)}';
+      onImagePicked(bytes, base64Str);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No fue posible cargar la imagen seleccionada.'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    }
+  }
+
   void _showCreateProductDialog() {
     final nameCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final priceCtrl = TextEditingController();
     final stockCtrl = TextEditingController(text: '10');
     int categoryId = 1;
+    Uint8List? selectedImageBytes;
+    String? selectedBase64;
 
     showDialog(
       context: context,
@@ -962,7 +1021,78 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Center(
+                  child: Stack(
+                    alignment: Alignment.topRight,
+                    children: [
+                      Container(
+                        width: 140,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          color: AppColors.sandBackground,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.sandBorder),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: selectedImageBytes != null
+                            ? Image.memory(selectedImageBytes!, fit: BoxFit.cover)
+                            : const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add_photo_alternate_outlined, size: 36, color: AppColors.turquoise),
+                                  SizedBox(height: 4),
+                                  Text('Sin imagen', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                                ],
+                              ),
+                      ),
+                      if (selectedImageBytes != null)
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: InkWell(
+                            onTap: () {
+                              setDialogState(() {
+                                selectedImageBytes = null;
+                                selectedBase64 = null;
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close, size: 16, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () {
+                      _pickProductImage(
+                        context: context,
+                        onImagePicked: (bytes, base64) {
+                          setDialogState(() {
+                            selectedImageBytes = bytes;
+                            selectedBase64 = base64;
+                          });
+                        },
+                      );
+                    },
+                    icon: const Icon(Icons.photo_library_outlined, size: 18),
+                    label: Text(
+                      selectedImageBytes != null ? 'Cambiar imagen' : 'Seleccionar imagen',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 TextField(
                   controller: nameCtrl,
                   decoration: const InputDecoration(labelText: 'Nombre del plato o bebida', border: OutlineInputBorder()),
@@ -1026,6 +1156,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   precio: price,
                   cantidad: stock,
                   categoriaId: categoryId,
+                  base64Image: selectedBase64,
                 );
 
                 if (ok && mounted) {
@@ -1053,6 +1184,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final priceCtrl = TextEditingController(text: product.precio.toInt().toString());
     final stockCtrl = TextEditingController(text: product.stock.toString());
     int categoryId = product.categoriaId > 0 && product.categoriaId <= 3 ? product.categoriaId : 1;
+    Uint8List? newImageBytes;
+    String? newBase64;
+    bool removeCurrentImage = false;
 
     showDialog(
       context: context,
@@ -1063,7 +1197,107 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Center(
+                  child: Stack(
+                    alignment: Alignment.topRight,
+                    children: [
+                      Container(
+                        width: 140,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          color: AppColors.sandBackground,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.sandBorder),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: newImageBytes != null
+                            ? Image.memory(newImageBytes!, fit: BoxFit.cover)
+                            : (removeCurrentImage
+                                ? const Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.no_photography_outlined, size: 36, color: AppColors.textMuted),
+                                      SizedBox(height: 4),
+                                      Text('Sin imagen', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                                    ],
+                                  )
+                                : ImageHelper.buildProductImage(
+                                    imageSrc: product.imagenSrc,
+                                    imageUrl: product.imageUrl,
+                                    productId: product.id,
+                                    assetFallback: product.localAssetFallback,
+                                    fit: BoxFit.cover,
+                                  )),
+                      ),
+                      if (newImageBytes != null || (!removeCurrentImage && (product.hasImage || product.imagenSrc != null)))
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: InkWell(
+                            onTap: () {
+                              setDialogState(() {
+                                newImageBytes = null;
+                                newBase64 = null;
+                                removeCurrentImage = true;
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.delete_outline, size: 16, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        _pickProductImage(
+                          context: context,
+                          onImagePicked: (bytes, base64) {
+                            setDialogState(() {
+                              newImageBytes = bytes;
+                              newBase64 = base64;
+                              removeCurrentImage = false;
+                            });
+                          },
+                        );
+                      },
+                      icon: const Icon(Icons.photo_library_outlined, size: 18),
+                      label: Text(
+                        (newImageBytes != null || (!removeCurrentImage && (product.hasImage || product.imagenSrc != null)))
+                            ? 'Cambiar imagen'
+                            : 'Seleccionar imagen',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    if (!removeCurrentImage && (product.hasImage || product.imagenSrc != null || newImageBytes != null)) ...[
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          setDialogState(() {
+                            newImageBytes = null;
+                            newBase64 = null;
+                            removeCurrentImage = true;
+                          });
+                        },
+                        icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                        label: const Text('Eliminar', style: TextStyle(fontSize: 13, color: AppColors.danger)),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 8),
                 TextField(
                   controller: nameCtrl,
                   decoration: const InputDecoration(labelText: 'Nombre', border: OutlineInputBorder()),
@@ -1122,6 +1356,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   precio: price,
                   cantidad: stock,
                   categoriaId: categoryId,
+                  base64Image: newBase64,
+                  removeImage: removeCurrentImage,
                 );
 
                 if (ok && mounted) {

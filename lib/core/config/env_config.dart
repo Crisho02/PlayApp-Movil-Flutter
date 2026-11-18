@@ -101,7 +101,7 @@ class EnvConfig {
 
   /// Playas admitidas para entrega en Cartagena
   static const List<String> beachZones = [
-    'Bocagrande (Frente a Kiosco El Bony)',
+    'Playas de Bocagrande, Cartagena',
     'Castillogrande (Bahía tranquila)',
     'El Laguito (Zona Hotel Hilton)',
     'Marbella / Cabrero',

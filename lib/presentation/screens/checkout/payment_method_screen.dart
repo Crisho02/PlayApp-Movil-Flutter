@@ -208,7 +208,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
                       )
                     : Text(
                         _selectedMethod == PaymentMethodConstants.wompi
-                            ? 'Pagar con Wompi Sandbox'
+                            ? 'Pagar con Wompi'
                             : 'Confirmar Pedido Contraentrega',
                       ),
               ),
@@ -266,7 +266,10 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
                       Text(
                         title,
@@ -276,8 +279,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
                           color: AppColors.deepNavy,
                         ),
                       ),
-                      if (badge != null) ...[
-                        const SizedBox(width: 8),
+                      if (badge != null)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
@@ -293,7 +295,6 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
                             ),
                           ),
                         ),
-                      ],
                     ],
                   ),
                   const SizedBox(height: 4),

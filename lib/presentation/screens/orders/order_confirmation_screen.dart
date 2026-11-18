@@ -80,7 +80,7 @@ class OrderConfirmationScreen extends StatelessWidget {
                       ),
                       child: Text(
                         isWompi
-                            ? 'Tu pago ha sido aprobado exitosamente a través de Wompi Sandbox (Bancolombia). Ya iniciamos la preparación de tus productos para entregarlos directamente en tu carpa de playa.'
+                            ? 'Tu pago ha sido aprobado exitosamente a través de Wompi (Bancolombia). Ya iniciamos la preparación de tus productos para entregarlos directamente en tu carpa de playa.'
                             : 'Tu pedido contraentrega ha sido recibido con éxito. Ten preparado el monto en ${order.metodoPagoLabel.toLowerCase()} al recibir tus productos en la carpa.',
                         style: const TextStyle(
                           fontSize: 13,

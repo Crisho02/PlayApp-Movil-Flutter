@@ -369,6 +369,7 @@ class AdminProvider extends ChangeNotifier {
     required int cantidad,
     required int categoriaId,
     String? base64Image,
+    bool removeImage = false,
   }) async {
     final correo = _getAdminEmail();
 
@@ -381,7 +382,9 @@ class AdminProvider extends ChangeNotifier {
         'stock': cantidad,
         'categoria': categoriaId,
       };
-      if (base64Image != null && base64Image.isNotEmpty) {
+      if (removeImage) {
+        body['removeImage'] = true;
+      } else if (base64Image != null && base64Image.isNotEmpty) {
         body['base64Image'] = base64Image;
       }
 

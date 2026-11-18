@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:playapp_movil_flutter/core/config/env_config.dart';
 import 'package:playapp_movil_flutter/core/constants/app_constants.dart';
 import 'package:playapp_movil_flutter/core/utils/currency_formatter.dart';
+import 'package:playapp_movil_flutter/data/models/cart_item_model.dart';
 import 'package:playapp_movil_flutter/data/models/order_model.dart';
 import 'package:playapp_movil_flutter/data/models/product_model.dart';
 import 'package:playapp_movil_flutter/data/models/review_model.dart';
@@ -349,7 +350,7 @@ void main() {
                 'total': 45000.0,
                 'shipmentData': {
                   'direccion': 'Playa Bocagrande',
-                  'barrio': 'Bocagrande (Kiosco El Bony)',
+                  'barrio': 'Playas de Bocagrande, Cartagena',
                   'carpa': 12,
                 },
                 'items': [],
@@ -383,7 +384,7 @@ void main() {
           home: Scaffold(
             body: SingleChildScrollView(
               child: BeachMapWidget(
-                selectedZone: 'Bocagrande (Kiosco El Bony)',
+                selectedZone: 'Playas de Bocagrande, Cartagena',
                 onZoneChanged: (_) {},
                 carpaController: carpaCtrl,
                 notesController: notesCtrl,
@@ -395,7 +396,7 @@ void main() {
       );
 
       expect(find.text('Zona de Entrega en Playa'), findsOneWidget);
-      expect(find.text('Bocagrande (Kiosco El Bony)'), findsOneWidget);
+      expect(find.text('Playas de Bocagrande, Cartagena'), findsOneWidget);
       expect(find.text('Bocagrande Central (Hotel Caribe)'), findsOneWidget);
       expect(find.text('N° Carpa / Mesa'), findsOneWidget);
       expect(find.text('Referencia / Toalla'), findsOneWidget);
@@ -595,6 +596,61 @@ void main() {
       expect(EnvConfig.apiBaseUrl.startsWith('http://'), isTrue);
       EnvConfig.setActiveBaseUrl('http://127.0.0.1:8080');
       expect(EnvConfig.apiBaseUrl, 'http://127.0.0.1:8080');
+    });
+
+    test('AdminTopProduct parses historical unit price, revenue and calculates rank', () {
+      final jsonSample = {
+        'nombre': 'Pescado frito',
+        'cantidad': 194,
+        'ingresos': 6208000.0,
+        'precioUnitario': 32000.0,
+      };
+      final top = AdminTopProduct.fromJson(jsonSample);
+      expect(top.nombre, 'Pescado frito');
+      expect(top.cantidadVendida, 194);
+      expect(top.precio, 32000.0);
+      expect(top.ingresosGenerados, 6208000.0);
+      expect(CurrencyFormatter.formatCOP(top.precio), contains('32.000'));
+      expect(CurrencyFormatter.formatCOP(top.ingresosGenerados), contains('6.208.000'));
+    });
+
+    test('AdminTopProduct calculates unit price from revenue if price is missing or zero', () {
+      final jsonFallback = {
+        'nombre': 'Mojarra con patacones',
+        'cantidad': 100,
+        'ingresos': 3500000.0,
+      };
+      final top = AdminTopProduct.fromJson(jsonFallback);
+      expect(top.cantidadVendida, 100);
+      expect(top.precio, 35000.0);
+      expect(top.ingresosGenerados, 3500000.0);
+    });
+
+    test('CartItemModel unpacks nested mongo producto object with image and pricing', () {
+      final jsonWithNestedProduct = {
+        'cantidad': 2,
+        'producto': {
+          'id': '6738c8230b80f252cfdf7ecb',
+          'nombre': 'Arepa de huevo',
+          'precio': 9000.0,
+          'imageSRC': 'data:image/jpeg;base64,/9j/4AAQSkZJRg...',
+        },
+      };
+      final item = CartItemModel.fromJson(jsonWithNestedProduct);
+      expect(item.id, '6738c8230b80f252cfdf7ecb');
+      expect(item.nombre, 'Arepa de huevo');
+      expect(item.precio, 9000.0);
+      expect(item.cantidad, 2);
+      expect(item.subtotal, 18000.0);
+      expect(item.imageSrc, contains('data:image/jpeg;base64'));
+    });
+
+    test('ProductModel.inferAssetFallback recognizes food and drink items correctly', () {
+      expect(ProductModel.inferAssetFallback('Coca-Cola 400ml'), 'assets/images/Bebidas.jpeg');
+      expect(ProductModel.inferAssetFallback('Cerveza Club Colombia'), 'assets/images/Bebidas.jpeg');
+      expect(ProductModel.inferAssetFallback('Pescado frito con arroz'), 'assets/images/Pescado.jpg');
+      expect(ProductModel.inferAssetFallback('Arepa de huevo costeña'), 'assets/images/catalogo/arepa-huevo.jpg');
+      expect(ProductModel.inferAssetFallback('Arroz de coco tradicional'), 'assets/images/catalogo/arroz-coco.jpg');
     });
   });
 }

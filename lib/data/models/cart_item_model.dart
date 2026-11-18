@@ -23,6 +23,7 @@ class CartItemModel {
   });
 
   double get subtotal => precio * cantidad;
+  String? get imageSrc => imagenSrc;
 
   factory CartItemModel.fromProduct(ProductModel product, {int cantidad = 1}) {
     return CartItemModel(
@@ -38,17 +39,46 @@ class CartItemModel {
   }
 
   factory CartItemModel.fromJson(Map<String, dynamic> json) {
-    final pId = json['productoId']?.toString() ?? json['id']?.toString() ?? '';
-    final name = json['nombre']?.toString() ?? 'Producto';
+    Map<String, dynamic>? prodMap;
+    if (json['producto'] is Map<String, dynamic>) {
+      prodMap = json['producto'] as Map<String, dynamic>;
+    } else if (json['producto'] is Map) {
+      prodMap = Map<String, dynamic>.from(json['producto'] as Map);
+    }
 
-    final rawPrice = json['precioUnitario'] ?? json['precio'] ?? 0.0;
+    final pId = prodMap?['id']?.toString() ??
+        prodMap?['_id']?.toString() ??
+        json['productoId']?.toString() ??
+        json['id']?.toString() ??
+        '';
+
+    final name = prodMap?['nombre']?.toString() ??
+        json['nombre']?.toString() ??
+        'Producto';
+
+    final rawPrice = prodMap?['precio'] ??
+        json['precioUnitario'] ??
+        json['precio'] ??
+        0.0;
     final price = (rawPrice is num) ? rawPrice.toDouble() : 0.0;
 
-    final rawCant = json['cantidad'] ?? 1;
+    final rawCant = json['cantidad'] ?? prodMap?['cantidad'] ?? 1;
     final cant = (rawCant is num) ? rawCant.toInt() : 1;
 
-    final imgUrl = json['imagenUrl']?.toString() ??
+    final rawImageSrc = prodMap?['imageSRC']?.toString() ??
+        prodMap?['imagenSrc']?.toString() ??
+        prodMap?['imagen']?.toString() ??
+        json['imageSRC']?.toString() ??
+        json['imagenSrc']?.toString();
+
+    final rawImageUrl = prodMap?['imageUrl']?.toString() ??
+        prodMap?['imagenUrl']?.toString() ??
+        json['imagenUrl']?.toString() ??
         (pId.isNotEmpty ? ImageHelper.productImageUrl(pId) : null);
+
+    final assetFallback = prodMap?['assetFallback']?.toString() ??
+        json['assetFallback']?.toString() ??
+        ProductModel.inferAssetFallback(name);
 
     return CartItemModel(
       id: json['id']?.toString() ?? pId,
@@ -56,9 +86,9 @@ class CartItemModel {
       nombre: name,
       precio: price,
       cantidad: cant,
-      imagenUrl: imgUrl,
-      imagenSrc: json['imageSRC']?.toString() ?? json['imagenSrc']?.toString(),
-      assetFallback: json['assetFallback']?.toString(),
+      imagenUrl: rawImageUrl,
+      imagenSrc: rawImageSrc,
+      assetFallback: assetFallback,
     );
   }
 

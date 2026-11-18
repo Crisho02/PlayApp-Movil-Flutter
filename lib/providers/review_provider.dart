@@ -24,6 +24,7 @@ class ReviewProvider extends ChangeNotifier {
     try {
       final res = await ApiClient.get<dynamic>(
         ApiEndpoints.reviews,
+        queryParameters: {'limit': 5},
       );
 
       if (res.success && res.data != null) {
@@ -36,6 +37,7 @@ class ReviewProvider extends ChangeNotifier {
 
         _reviews = list
             .map((item) => ReviewModel.fromJson(item as Map<String, dynamic>))
+            .take(5)
             .toList();
       } else {
         _errorMessage = res.message ?? 'No se pudieron cargar las reseñas.';

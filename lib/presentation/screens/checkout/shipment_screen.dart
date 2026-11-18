@@ -15,8 +15,8 @@ class ShipmentScreen extends StatefulWidget {
 
 class _ShipmentScreenState extends State<ShipmentScreen> {
   final _formKey = GlobalKey<FormState>();
-  String _selectedZone = 'Bocagrande (Kiosco El Bony)';
-  final _addressCtrl = TextEditingController(text: 'Cra. 1 frente a Kiosco El Bony, Bocagrande');
+  String _selectedZone = 'Playas de Bocagrande, Cartagena';
+  final _addressCtrl = TextEditingController(text: 'Playas de Bocagrande, Cra. 1, Cartagena de Indias');
   final _carpaCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();

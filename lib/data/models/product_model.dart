@@ -77,7 +77,9 @@ class ProductModel {
   bool get isAvailable => cantidadDisponible > 0;
 
   /// Retorna la ruta del asset local si coincide con algún producto conocido de PlayApp
-  String? get localAssetFallback {
+  String? get localAssetFallback => inferAssetFallback(nombre);
+
+  static String? inferAssetFallback(String nombre) {
     final lower = nombre.toLowerCase();
     if (lower.contains('hamburguesa') || lower.contains('burguer')) {
       return 'assets/images/Burguer.jpg';
@@ -85,7 +87,7 @@ class ProductModel {
     if (lower.contains('pescado') || lower.contains('mojarra') || lower.contains('corvina')) {
       return 'assets/images/Pescado.jpg';
     }
-    if (lower.contains('cerveza') || lower.contains('bebida') || lower.contains('limonada') || lower.contains('jugo') || lower.contains('agua') || lower.contains('gaseosa')) {
+    if (lower.contains('cerveza') || lower.contains('bebida') || lower.contains('limonada') || lower.contains('jugo') || lower.contains('agua') || lower.contains('gaseosa') || lower.contains('coca')) {
       return 'assets/images/Bebidas.jpeg';
     }
     if (lower.contains('arepa')) {

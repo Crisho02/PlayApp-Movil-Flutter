@@ -35,8 +35,8 @@ class _BeachMapWidgetState extends State<BeachMapWidget> {
 
   final List<Map<String, dynamic>> _zones = [
     {
-      'name': 'Bocagrande (Kiosco El Bony)',
-      'desc': 'Cra. 1 frente a Kiosco El Bony',
+      'name': 'Playas de Bocagrande, Cartagena',
+      'desc': 'Cra. 1, Sector Playas de Bocagrande',
       'lat': 10.3997,
       'lng': -75.5562,
       'badge': 'Más Popular',

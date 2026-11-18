@@ -40,12 +40,27 @@ class AdminTopProduct {
   });
 
   factory AdminTopProduct.fromJson(Map<String, dynamic> json) {
+    final rawCant = json['cantidadVendida'] ?? json['cantidad'] ?? 0;
+    final cant = (rawCant is num) ? rawCant.toInt() : 0;
+    final total = (json['ingresos'] is num)
+        ? (json['ingresos'] as num).toDouble()
+        : ((json['ingresosGenerados'] is num) ? (json['ingresosGenerados'] as num).toDouble() : 0.0);
+
+    double unitPrice = 0.0;
+    if (json['precioUnitario'] is num && (json['precioUnitario'] as num) > 0) {
+      unitPrice = (json['precioUnitario'] as num).toDouble();
+    } else if (json['precio'] is num && (json['precio'] as num) > 0) {
+      unitPrice = (json['precio'] as num).toDouble();
+    } else if (cant > 0 && total > 0) {
+      unitPrice = total / cant;
+    }
+
     return AdminTopProduct(
-      id: (json['id'] ?? '').toString(),
+      id: (json['productoId'] ?? json['id'] ?? '').toString(),
       nombre: (json['nombre'] ?? 'Producto').toString(),
-      precio: (json['precio'] is num) ? (json['precio'] as num).toDouble() : 0.0,
-      cantidadVendida: (json['cantidadVendida'] is num) ? (json['cantidadVendida'] as num).toInt() : 0,
-      ingresosGenerados: (json['ingresosGenerados'] is num) ? (json['ingresosGenerados'] as num).toDouble() : 0.0,
+      precio: unitPrice,
+      cantidadVendida: cant,
+      ingresosGenerados: total,
     );
   }
 }

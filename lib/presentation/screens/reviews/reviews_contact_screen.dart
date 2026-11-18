@@ -330,7 +330,7 @@ class _ReviewsContactScreenState extends State<ReviewsContactScreen> {
                   }
 
                   return Column(
-                    children: reviewProv.reviews.map((r) => _buildReviewCard(r)).toList(),
+                    children: reviewProv.reviews.take(5).map((r) => _buildReviewCard(r)).toList(),
                   );
                 },
               ),
@@ -377,7 +377,7 @@ class _ReviewsContactScreenState extends State<ReviewsContactScreen> {
                                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                               ),
                               Text(
-                                'Cra. 1, Bocagrande, Cartagena de Indias (Kiosco El Bony)',
+                                'Cra. 1, Playas de Bocagrande, Cartagena de Indias',
                                 style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                               ),
                             ],

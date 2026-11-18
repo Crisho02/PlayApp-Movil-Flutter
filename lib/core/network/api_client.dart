@@ -209,6 +209,61 @@ class ApiClient {
     }
   }
 
+  static Future<ApiResponse<T>> postMultipart<T>(
+    String path, {
+    Map<String, String>? fields,
+    List<http.MultipartFile>? files,
+    T Function(dynamic json)? parser,
+  }) async {
+    try {
+      final uri = _buildUri(path);
+      final request = http.MultipartRequest('POST', uri);
+
+      final token = SessionManager.getToken();
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      final cookie = SessionManager.getSessionCookie();
+      if (cookie != null && cookie.isNotEmpty) {
+        request.headers['Cookie'] = cookie;
+      }
+      request.headers['Accept'] = 'application/json';
+
+      if (fields != null) {
+        request.fields.addAll(fields);
+      }
+      if (files != null) {
+        request.files.addAll(files);
+      }
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 25));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      _captureCookie(response);
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        final data = parser != null ? parser(decoded) : decoded as T;
+        return ApiResponse(success: true, data: data, statusCode: response.statusCode);
+      } else {
+        String msg = 'No fue posible subir la información del producto.';
+        try {
+          final errJson = jsonDecode(utf8.decode(response.bodyBytes));
+          if (errJson is Map) {
+            msg = errJson['error']?.toString() ?? errJson['message']?.toString() ?? msg;
+          }
+        } catch (_) {}
+        return ApiResponse(success: false, message: msg, statusCode: response.statusCode);
+      }
+    } catch (_) {
+      return ApiResponse(
+        success: false,
+        message: 'No se pudo conectar con el servicio al subir archivos.',
+        statusCode: 0,
+      );
+    }
+  }
+
   static Future<ApiResponse<T>> delete<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
