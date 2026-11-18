@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'core/config/env_config.dart';
 import 'core/storage/session_manager.dart';
 import 'core/theme/app_theme.dart';
 import 'data/models/order_model.dart';
@@ -26,6 +27,7 @@ import 'providers/review_provider.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SessionManager.init();
+  await EnvConfig.resolveBaseUrl();
   runApp(const PlayAppMovil());
 }
 

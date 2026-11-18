@@ -23,13 +23,6 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _fillAdmin() {
-    setState(() {
-      _emailCtrl.text = 'adminplayapp01@gmail.com';
-      _passwordCtrl.text = 'admin123';
-    });
-  }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -248,19 +241,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                                         )
                                       : const Text('Ingresar'),
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-
-                              // Botón de acceso rápido para evaluador
-                              Center(
-                                child: TextButton.icon(
-                                  onPressed: _fillAdmin,
-                                  icon: const Icon(Icons.admin_panel_settings_outlined, size: 16),
-                                  label: const Text(
-                                    'Llenar credenciales Administrador',
-                                    style: TextStyle(fontSize: 12),
-                                  ),
                                 ),
                               ),
                             ],

@@ -11,8 +11,10 @@ import 'package:playapp_movil_flutter/data/models/admin_weather_model.dart';
 import 'package:playapp_movil_flutter/data/models/admin_report_model.dart';
 import 'package:playapp_movil_flutter/data/models/admin_user_model.dart';
 import 'package:playapp_movil_flutter/presentation/screens/admin/admin_dashboard_screen.dart';
+import 'package:playapp_movil_flutter/presentation/screens/auth/login_screen.dart';
 import 'package:playapp_movil_flutter/presentation/screens/cart/cart_screen.dart';
 import 'package:playapp_movil_flutter/presentation/screens/checkout/wompi_card_screen.dart';
+import 'package:playapp_movil_flutter/presentation/screens/reviews/reviews_contact_screen.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/beach_map_widget.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/product_card.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/responsive_product_grid.dart';
@@ -22,6 +24,7 @@ import 'package:playapp_movil_flutter/providers/auth_provider.dart';
 import 'package:playapp_movil_flutter/providers/cart_provider.dart';
 import 'package:playapp_movil_flutter/providers/order_provider.dart';
 import 'package:playapp_movil_flutter/providers/product_provider.dart';
+import 'package:playapp_movil_flutter/providers/review_provider.dart';
 import 'package:provider/provider.dart';
 
 void main() {
@@ -525,6 +528,73 @@ void main() {
       expect(find.text('Acceso Restringido'), findsOneWidget);
       expect(find.text('Volver a la Tienda'), findsOneWidget);
       expect(find.byIcon(Icons.lock_rounded), findsOneWidget);
+    });
+
+    testWidgets('LoginScreen has no prefilled admin credentials or testing buttons', (WidgetTester tester) async {
+      final auth = AuthProvider();
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: auth),
+          ],
+          child: const MaterialApp(
+            home: LoginScreen(),
+          ),
+        ),
+      );
+
+      // No debe existir el botón de prueba de administrador
+      expect(find.text('Llenar credenciales Administrador'), findsNothing);
+      expect(find.byIcon(Icons.admin_panel_settings_outlined), findsNothing);
+
+      // Los campos deben iniciar limpios sin secretos ni correos pre-cargados
+      final emailField = tester.widget<TextFormField>(
+        find.widgetWithText(TextFormField, 'Correo electrónico'),
+      );
+      expect(emailField.controller?.text.isEmpty, isTrue);
+
+      final passField = tester.widget<TextFormField>(
+        find.widgetWithText(TextFormField, 'Contraseña'),
+      );
+      expect(passField.controller?.text.isEmpty, isTrue);
+    });
+
+    testWidgets('ReviewsContactScreen renders without overflow at 320px mobile width', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final auth = AuthProvider();
+      final reviewProv = ReviewProvider();
+      final cartProv = CartProvider();
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: auth),
+            ChangeNotifierProvider.value(value: reviewProv),
+            ChangeNotifierProvider.value(value: cartProv),
+          ],
+          child: const MaterialApp(
+            home: ReviewsContactScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Reseñas de PlayApp'), findsOneWidget);
+      expect(find.text('Valoración:'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    test('EnvConfig resolves candidates and defaults cleanly', () {
+      expect(EnvConfig.apiBaseUrl.startsWith('http://'), isTrue);
+      EnvConfig.setActiveBaseUrl('http://127.0.0.1:8080');
+      expect(EnvConfig.apiBaseUrl, 'http://127.0.0.1:8080');
     });
   });
 }

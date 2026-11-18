@@ -77,16 +77,37 @@ class ApiClient {
     );
   }
 
+  static Future<http.Response> _executeWithFallback(
+    Future<http.Response> Function(Uri uri) requestFn,
+    String path, [
+    Map<String, dynamic>? queryParameters,
+  ]) async {
+    final initialBaseUrl = EnvConfig.apiBaseUrl;
+    try {
+      final uri = _buildUri(path, queryParameters);
+      return await requestFn(uri);
+    } catch (_) {
+      // Reintentar si se detecta un host alternativo (ej. cambio entre USB y Wi-Fi)
+      final newBaseUrl = await EnvConfig.resolveBaseUrl(forceRefresh: true);
+      if (newBaseUrl != initialBaseUrl) {
+        final retryUri = _buildUri(path, queryParameters);
+        return await requestFn(retryUri);
+      }
+      rethrow;
+    }
+  }
+
   static Future<ApiResponse<T>> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
     T Function(dynamic json)? parser,
   }) async {
     try {
-      final uri = _buildUri(path, queryParameters);
-      final response = await _client
-          .get(uri, headers: _buildHeaders())
-          .timeout(const Duration(seconds: 10));
+      final response = await _executeWithFallback(
+        (uri) => _client.get(uri, headers: _buildHeaders()).timeout(const Duration(seconds: 10)),
+        path,
+        queryParameters,
+      );
 
       _captureCookie(response);
 
@@ -119,14 +140,17 @@ class ApiClient {
     T Function(dynamic json)? parser,
   }) async {
     try {
-      final uri = _buildUri(path);
-      final response = await _client
-          .post(
-            uri,
-            headers: _buildHeaders(),
-            body: body != null ? jsonEncode(body) : null,
-          )
-          .timeout(const Duration(seconds: 12));
+      final bodyBytes = body != null ? jsonEncode(body) : null;
+      final response = await _executeWithFallback(
+        (uri) => _client
+            .post(
+              uri,
+              headers: _buildHeaders(),
+              body: bodyBytes,
+            )
+            .timeout(const Duration(seconds: 12)),
+        path,
+      );
 
       _captureCookie(response);
 
@@ -159,14 +183,17 @@ class ApiClient {
     T Function(dynamic json)? parser,
   }) async {
     try {
-      final uri = _buildUri(path);
-      final response = await _client
-          .put(
-            uri,
-            headers: _buildHeaders(),
-            body: body != null ? jsonEncode(body) : null,
-          )
-          .timeout(const Duration(seconds: 12));
+      final bodyBytes = body != null ? jsonEncode(body) : null;
+      final response = await _executeWithFallback(
+        (uri) => _client
+            .put(
+              uri,
+              headers: _buildHeaders(),
+              body: bodyBytes,
+            )
+            .timeout(const Duration(seconds: 12)),
+        path,
+      );
 
       _captureCookie(response);
 
@@ -188,10 +215,11 @@ class ApiClient {
     T Function(dynamic json)? parser,
   }) async {
     try {
-      final uri = _buildUri(path, queryParameters);
-      final response = await _client
-          .delete(uri, headers: _buildHeaders())
-          .timeout(const Duration(seconds: 12));
+      final response = await _executeWithFallback(
+        (uri) => _client.delete(uri, headers: _buildHeaders()).timeout(const Duration(seconds: 12)),
+        path,
+        queryParameters,
+      );
 
       _captureCookie(response);
 

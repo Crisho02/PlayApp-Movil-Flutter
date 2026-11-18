@@ -141,13 +141,16 @@ class _ReviewsContactScreenState extends State<ReviewsContactScreen> {
                 children: const [
                   Icon(Icons.star, color: AppColors.warning, size: 20),
                   SizedBox(width: 6),
-                  Text(
-                    'EXPERIENCIAS DE CLIENTES EN PLAYA',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primary,
-                      letterSpacing: 0.5,
+                  Expanded(
+                    child: Text(
+                      'EXPERIENCIAS DE CLIENTES EN PLAYA',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
+                        letterSpacing: 0.5,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -196,26 +199,31 @@ class _ReviewsContactScreenState extends State<ReviewsContactScreen> {
                       ),
                       const SizedBox(height: 14),
 
-                      // Selector de estrellas 1 a 5
-                      Row(
+                      // Selector de estrellas 1 a 5 (Adaptable y responsive)
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 6,
                         children: [
                           const Text(
-                            'Valoración: ',
+                            'Valoración:',
                             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                           ),
-                          const SizedBox(width: 8),
                           Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: List.generate(5, (index) {
                               final star = index + 1;
-                              return IconButton(
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                icon: Icon(
-                                  star <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                                  color: AppColors.warning,
-                                  size: 28,
+                              return InkWell(
+                                onTap: () => setState(() => _rating = star),
+                                borderRadius: BorderRadius.circular(20),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+                                  child: Icon(
+                                    star <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                                    color: AppColors.warning,
+                                    size: 30,
+                                  ),
                                 ),
-                                onPressed: () => setState(() => _rating = star),
                               );
                             }),
                           ),
@@ -270,6 +278,35 @@ class _ReviewsContactScreenState extends State<ReviewsContactScreen> {
                       child: Padding(
                         padding: EdgeInsets.all(24),
                         child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+
+                  if (reviewProv.errorMessage != null && reviewProv.reviews.isEmpty) {
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.sandBorder),
+                      ),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.cloud_off_rounded, color: AppColors.coral, size: 36),
+                          const SizedBox(height: 8),
+                          Text(
+                            reviewProv.errorMessage!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: () => reviewProv.fetchReviews(),
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: const Text('Reintentar conexión'),
+                          ),
+                        ],
                       ),
                     );
                   }
@@ -424,6 +461,7 @@ class _ReviewsContactScreenState extends State<ReviewsContactScreen> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: _contactSubject,
                         decoration: const InputDecoration(labelText: 'Asunto'),
                         items: const [
@@ -487,11 +525,16 @@ class _ReviewsContactScreenState extends State<ReviewsContactScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                r.nombreCliente,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.deepNavy),
+              Expanded(
+                child: Text(
+                  r.nombreCliente,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.deepNavy),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+              const SizedBox(width: 8),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: List.generate(
                   5,
                   (i) => Icon(

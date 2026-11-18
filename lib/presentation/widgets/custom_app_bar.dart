@@ -28,7 +28,10 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       elevation: 0.5,
       leadingWidth: 48,
       title: title != null
-          ? Text(title!)
+          ? Text(
+              title!,
+              overflow: TextOverflow.ellipsis,
+            )
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -76,9 +79,13 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       actions: [
         if (extraActions != null) ...extraActions!,
         if (showCart)
-          Consumer<CartProvider>(
-            builder: (context, cart, _) {
-              final count = cart.itemCount;
+          Builder(
+            builder: (context) {
+              CartProvider? cart;
+              try {
+                cart = Provider.of<CartProvider>(context);
+              } catch (_) {}
+              final count = cart?.itemCount ?? 0;
               return Stack(
                 alignment: Alignment.center,
                 children: [
