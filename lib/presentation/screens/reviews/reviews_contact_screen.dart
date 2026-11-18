@@ -209,23 +209,27 @@ class _ReviewsContactScreenState extends State<ReviewsContactScreen> {
                             'Valoración:',
                             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                           ),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: List.generate(5, (index) {
-                              final star = index + 1;
-                              return InkWell(
-                                onTap: () => setState(() => _rating = star),
-                                borderRadius: BorderRadius.circular(20),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
-                                  child: Icon(
-                                    star <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                                    color: AppColors.warning,
-                                    size: 30,
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: List.generate(5, (index) {
+                                final star = index + 1;
+                                return InkWell(
+                                  onTap: () => setState(() => _rating = star),
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+                                    child: Icon(
+                                      star <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                                      color: AppColors.warning,
+                                      size: 28,
+                                    ),
                                   ),
-                                ),
-                              );
-                            }),
+                                );
+                              }),
+                            ),
                           ),
                         ],
                       ),

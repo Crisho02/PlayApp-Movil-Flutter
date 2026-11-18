@@ -60,11 +60,12 @@ class OrderConfirmationScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      runSpacing: 6,
                       children: [
                         StatusBadge(label: order.estadoPedido, color: order.estadoPedidoColor),
-                        const SizedBox(width: 8),
                         StatusBadge(label: order.estadoPago, color: order.estadoPagoColor),
                       ],
                     ),
@@ -101,45 +102,19 @@ class OrderConfirmationScreen extends StatelessWidget {
                         border: Border.all(color: AppColors.sandBorder),
                       ),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('Playa:', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                              Text(order.barrio ?? 'Bocagrande', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                            ],
-                          ),
+                          _buildSummaryItem('Playa:', order.barrio ?? 'Bocagrande, Cartagena'),
                           if (order.carpa != null) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Carpa / Mesa:', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                                Text('#${order.carpa}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.primaryDark)),
-                              ],
-                            ),
+                            const SizedBox(height: 10),
+                            _buildSummaryItem('Carpa / Mesa:', '#${order.carpa}', valueColor: AppColors.primaryDark),
                           ],
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('Método de Pago:', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                              Text(order.metodoPagoLabel, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 10),
+                          _buildSummaryItem('Método de Pago:', order.metodoPagoLabel),
+                          const SizedBox(height: 10),
                           const Divider(height: 1),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('Total Pagado / a Pagar:', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-                              Text(
-                                CurrencyFormatter.formatCOP(order.total),
-                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.primaryDark),
-                              ),
-                            ],
-                          ),
+                          const SizedBox(height: 10),
+                          _buildTotalItem('Total Pagado / a Pagar:', CurrencyFormatter.formatCOP(order.total)),
                         ],
                       ),
                     ),
@@ -174,6 +149,124 @@ class OrderConfirmationScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSummaryItem(String label, String value, {Color? valueColor}) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 280;
+        if (isNarrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: valueColor ?? AppColors.deepNavy,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 5,
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              flex: 6,
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: valueColor ?? AppColors.deepNavy,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTotalItem(String label, String value) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 270;
+        if (isNarrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.deepNavy),
+              ),
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.primaryDark),
+                ),
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.deepNavy),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                value,
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppColors.primaryDark),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

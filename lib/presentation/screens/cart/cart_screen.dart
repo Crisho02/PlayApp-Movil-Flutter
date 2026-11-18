@@ -162,13 +162,18 @@ class CartScreen extends StatelessWidget {
                                           ],
                                         ),
                                       ),
-                                      const Spacer(),
-                                      Text(
-                                        CurrencyFormatter.formatCOP(item.subtotal),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 13,
-                                          color: AppColors.deepNavy,
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          CurrencyFormatter.formatCOP(item.subtotal),
+                                          textAlign: TextAlign.right,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 13,
+                                            color: AppColors.deepNavy,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ],
@@ -236,20 +241,29 @@ class CartScreen extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Total a Pagar:',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 17,
-                              color: AppColors.deepNavy,
+                          const Expanded(
+                            child: Text(
+                              'Total a Pagar:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                                color: AppColors.deepNavy,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          Text(
-                            CurrencyFormatter.formatCOP(cart.total),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 19,
-                              color: AppColors.primaryDark,
+                          const SizedBox(width: 8),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              CurrencyFormatter.formatCOP(cart.total),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 18,
+                                color: AppColors.primaryDark,
+                              ),
                             ),
                           ),
                         ],
@@ -262,7 +276,10 @@ class CartScreen extends StatelessWidget {
                             Navigator.pushNamed(context, '/checkout-shipment');
                           },
                           icon: const Icon(Icons.arrow_forward, size: 18),
-                          label: const Text('Continuar a Entrega en Playa'),
+                          label: const FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Continuar a Entrega en Playa'),
+                          ),
                         ),
                       ),
                     ],

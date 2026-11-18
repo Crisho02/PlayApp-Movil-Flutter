@@ -299,10 +299,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Top Productos Más Vendidos',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.deepNavy),
+                const Expanded(
+                  child: Text(
+                    'Top Productos Más Vendidos',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.deepNavy),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
@@ -354,17 +359,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                               Text(
                                 p.nombre,
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               Text(
                                 '${p.cantidadVendida} unidades vendidas · ${CurrencyFormatter.formatCOP(p.precio)} c/u',
                                 style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
                         ),
-                        Text(
-                          CurrencyFormatter.formatCOP(p.ingresosGenerados),
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryDark, fontSize: 13),
+                        const SizedBox(width: 8),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            CurrencyFormatter.formatCOP(p.ingresosGenerados),
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryDark, fontSize: 13),
+                          ),
                         ),
                       ],
                     ),
@@ -450,10 +464,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+              const SizedBox(width: 4),
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
@@ -465,14 +484,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.deepNavy),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.deepNavy),
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             subtitle,
             style: const TextStyle(fontSize: 11, color: AppColors.textLight),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -575,10 +600,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  order.displayCode,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.deepNavy),
+                Expanded(
+                  child: Text(
+                    order.displayCode,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.deepNavy),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   order.fecha,
                   style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
@@ -586,20 +616,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ],
             ),
             const SizedBox(height: 8),
-            Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                const Icon(Icons.person, size: 14, color: AppColors.textMuted),
-                const SizedBox(width: 4),
-                Text(
-                  clientName,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.person, size: 14, color: AppColors.textMuted),
+                    const SizedBox(width: 4),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 160),
+                      child: Text(
+                        clientName,
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                if (order.telefono != null && order.telefono!.isNotEmpty) ...[
-                  const Icon(Icons.phone, size: 14, color: AppColors.textMuted),
-                  const SizedBox(width: 4),
-                  Text(order.telefono!, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
-                ],
+                if (order.telefono != null && order.telefono!.isNotEmpty)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.phone, size: 14, color: AppColors.textMuted),
+                      const SizedBox(width: 4),
+                      Text(order.telefono!, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                    ],
+                  ),
               ],
             ),
             if ((order.direccion != null && order.direccion!.isNotEmpty) || order.carpa != null) ...[
@@ -619,11 +664,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ),
             ],
             const Divider(height: 18, color: AppColors.sandBorder),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 6,
               children: [
                 Wrap(
                   spacing: 6,
+                  runSpacing: 4,
                   children: [
                     StatusBadge(label: order.estadoPedido, color: order.estadoPedidoColor),
                     StatusBadge(label: order.estadoPago, color: order.estadoPagoColor, isSmall: true),
@@ -1514,7 +1563,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               physics: const NeverScrollableScrollPhysics(),
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
-              childAspectRatio: 2.2,
+              childAspectRatio: 2.1,
               children: [
                 _buildWeatherMiniCard(Icons.air, 'Viento', weather?.wind ?? '17,7 km/h', AppColors.primary),
                 _buildWeatherMiniCard(Icons.water_drop, 'Humedad', weather?.humidity ?? '74,0 %', AppColors.turquoise),
@@ -1541,10 +1590,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Ocupación Estimada en Playa',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.deepNavy),
+                      const Expanded(
+                        child: Text(
+                          'Ocupación Estimada en Playa',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.deepNavy),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
@@ -1559,22 +1613,60 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        weather?.estimate != null
-                            ? '${weather!.estimate!.minimum} % – ${weather.estimate!.maximum} %'
-                            : '0 % – 1 %',
-                        style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        weather?.estimate?.condition ?? (weather?.isNight == true ? 'Noche' : 'Condición óptima'),
-                        style: const TextStyle(fontSize: 13, color: AppColors.textMuted, fontWeight: FontWeight.w600),
-                      ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final occupationRange = (weather?.estimate != null)
+                          ? '${weather!.estimate!.minimum} % – ${weather.estimate!.maximum} %'
+                          : '0 % – 1 %';
+                      final conditionText = weather?.estimate?.condition ??
+                          (weather?.isNight == true ? 'Noche' : 'Condición óptima');
+
+                      final isNarrow = constraints.maxWidth < 280;
+                      if (isNarrow) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                occupationRange,
+                                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              conditionText,
+                              style: const TextStyle(fontSize: 13, color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        );
+                      }
+
+                      return Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 10,
+                        runSpacing: 4,
+                        children: [
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              occupationRange,
+                              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
+                            ),
+                          ),
+                          Text(
+                            conditionText,
+                            style: const TextStyle(fontSize: 13, color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 10),
                   LinearProgressIndicator(
@@ -1682,11 +1774,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
                 Text(
-                  value,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.deepNavy),
+                  label,
+                  style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.deepNavy),
+                    maxLines: 1,
+                  ),
                 ),
               ],
             ),
@@ -2152,8 +2253,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(r.nombre, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            Expanded(
+                              child: Text(
+                                r.nombre,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
                             Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: List.generate(5, (i) {
                                 return Icon(
                                   i < r.valoracion ? Icons.star_rounded : Icons.star_border_rounded,
@@ -2167,22 +2277,45 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         const SizedBox(height: 6),
                         Text(
                           r.comentario,
-                          style: const TextStyle(fontSize: 13, color: AppColors.textMain),
+                          style: const TextStyle(fontSize: 13, color: AppColors.textMain, height: 1.3),
                         ),
                         const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              r.fechaFormateada,
-                              style: const TextStyle(fontSize: 11, color: AppColors.textLight),
-                            ),
-                            TextButton.icon(
-                              onPressed: () => _confirmDeleteReview(r),
-                              icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
-                              label: const Text('Eliminar', style: TextStyle(fontSize: 11, color: AppColors.danger)),
-                            ),
-                          ],
+                        SizedBox(
+                          width: double.infinity,
+                          child: Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              Text(
+                                r.fechaFormateada,
+                                style: const TextStyle(fontSize: 11, color: AppColors.textLight),
+                              ),
+                              InkWell(
+                                onTap: () => _confirmDeleteReview(r),
+                                borderRadius: BorderRadius.circular(6),
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.delete_outline, size: 15, color: AppColors.danger),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Eliminar',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.danger,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),

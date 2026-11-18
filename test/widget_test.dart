@@ -14,7 +14,9 @@ import 'package:playapp_movil_flutter/data/models/admin_user_model.dart';
 import 'package:playapp_movil_flutter/presentation/screens/admin/admin_dashboard_screen.dart';
 import 'package:playapp_movil_flutter/presentation/screens/auth/login_screen.dart';
 import 'package:playapp_movil_flutter/presentation/screens/cart/cart_screen.dart';
+import 'package:playapp_movil_flutter/presentation/screens/checkout/payment_method_screen.dart';
 import 'package:playapp_movil_flutter/presentation/screens/checkout/wompi_card_screen.dart';
+import 'package:playapp_movil_flutter/presentation/screens/orders/order_confirmation_screen.dart';
 import 'package:playapp_movil_flutter/presentation/screens/home/home_screen.dart';
 import 'package:playapp_movil_flutter/presentation/screens/reviews/reviews_contact_screen.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/beach_map_widget.dart';
@@ -684,6 +686,122 @@ void main() {
       expect(ProductModel.inferAssetFallback('Pescado frito con arroz'), 'assets/images/Pescado.jpg');
       expect(ProductModel.inferAssetFallback('Arepa de huevo costeña'), 'assets/images/catalogo/arepa-huevo.jpg');
       expect(ProductModel.inferAssetFallback('Arroz de coco tradicional'), 'assets/images/catalogo/arroz-coco.jpg');
+    });
+  });
+
+  group('Responsive Layout: RenderFlex Overflow Prevention Tests', () {
+    final widths = [320.0, 360.0, 375.0, 390.0, 412.0, 768.0, 1200.0];
+
+    for (final w in widths) {
+      testWidgets('OrderConfirmationScreen has no overflow at width $w', (WidgetTester tester) async {
+        tester.view.physicalSize = Size(w, 850);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+
+        final testOrder = OrderModel(
+          id: '6afe19e1b2c3d4e5f6',
+          fecha: '18 de noviembre de 2026, 4:34 p. m.',
+          total: 33000.0,
+          estadoPedido: OrderStatusConstants.recibido,
+          estadoPago: PaymentStatusConstants.aprobado,
+          metodoPago: PaymentMethodConstants.wompi,
+          direccion: 'Bocagrande, Cartagena de Indias',
+          carpa: 14,
+          clienteNombre: 'Cristian Tapias',
+          telefono: '3232542588',
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: OrderConfirmationScreen(order: testOrder),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('¡Pedido Confirmado!'), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: 'RenderFlex overflow at width $w');
+      });
+
+      testWidgets('PaymentMethodScreen has no overflow at width $w', (WidgetTester tester) async {
+        tester.view.physicalSize = Size(w, 850);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+
+        final auth = AuthProvider();
+        final cart = CartProvider();
+        final orderProv = OrderProvider();
+
+        final shipmentData = {
+          'direccion': 'Playas de Bocagrande, Cartagena de Indias',
+          'carpa': '14',
+          'telefono': '3232542588',
+          'notas': 'Entregar sombrilla azul',
+        };
+
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: auth),
+              ChangeNotifierProvider.value(value: cart),
+              ChangeNotifierProvider.value(value: orderProv),
+            ],
+            child: MaterialApp(
+              home: PaymentMethodScreen(shipmentData: shipmentData),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Método de Pago'), findsWidgets);
+        expect(find.text('Total con envío incluido:'), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: 'RenderFlex overflow at width $w');
+      });
+    }
+
+    testWidgets('AdminDashboardScreen tabs render without overflow on mobile (360px)', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final auth = AuthProvider();
+      auth.updateProfileLocally(
+        UserModel(
+          id: 'admin_1',
+          nombre: 'Admin PlayApp',
+          email: 'adminplayapp01@gmail.com',
+          rol: 'ROLE_ADMIN',
+          isAdmin: true,
+        ),
+      );
+
+      final adminProv = AdminProvider();
+      final prodProv = ProductProvider();
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: auth),
+            ChangeNotifierProvider.value(value: adminProv),
+            ChangeNotifierProvider.value(value: prodProv),
+          ],
+          child: const MaterialApp(
+            home: AdminDashboardScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Panel de Administrador'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

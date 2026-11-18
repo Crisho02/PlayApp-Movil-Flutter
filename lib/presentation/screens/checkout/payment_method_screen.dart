@@ -178,19 +178,54 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: AppColors.sandBorder),
               ),
-              child: Column(
-                children: [
-                  Row(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isNarrow = constraints.maxWidth < 280;
+                  if (isNarrow) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Total con envío incluido:',
+                          style: TextStyle(color: AppColors.textMuted, fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            CurrencyFormatter.formatCOP(cart.total),
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.primaryDark),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const Text('Total con envío incluido:', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                      Text(
-                        CurrencyFormatter.formatCOP(cart.total),
-                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.primaryDark),
+                      const Expanded(
+                        child: Text(
+                          'Total con envío incluido:',
+                          style: TextStyle(color: AppColors.textMuted, fontSize: 13, fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          CurrencyFormatter.formatCOP(cart.total),
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppColors.primaryDark),
+                        ),
                       ),
                     ],
-                  ),
-                ],
+                  );
+                },
               ),
             ),
             const SizedBox(height: 24),
@@ -206,10 +241,13 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
                         height: 20,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                       )
-                    : Text(
-                        _selectedMethod == PaymentMethodConstants.wompi
-                            ? 'Pagar con Wompi'
-                            : 'Confirmar Pedido Contraentrega',
+                    : FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          _selectedMethod == PaymentMethodConstants.wompi
+                              ? 'Pagar con Wompi'
+                              : 'Confirmar Pedido Contraentrega',
+                        ),
                       ),
               ),
             ),
@@ -234,7 +272,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
       borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.turquoiseLight.withOpacity(0.3) : Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -258,10 +296,10 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
               child: Icon(
                 isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
                 color: isSelected ? AppColors.primaryDark : AppColors.textLight,
-                size: 22,
+                size: 20,
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,14 +312,16 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
                       Text(
                         title,
                         style: const TextStyle(
-                          fontSize: 15,
+                          fontSize: 14.5,
                           fontWeight: FontWeight.w800,
                           color: AppColors.deepNavy,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       if (badge != null)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
                             color: badgeColor ?? AppColors.primary,
                             borderRadius: BorderRadius.circular(6),
@@ -301,7 +341,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
                   Text(
                     description,
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 12.5,
                       color: AppColors.textMuted,
                       height: 1.3,
                     ),
@@ -309,8 +349,11 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 10),
-            Icon(icon, color: isSelected ? AppColors.primaryDark : AppColors.textMuted, size: 24),
+            const SizedBox(width: 8),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(icon, color: isSelected ? AppColors.primaryDark : AppColors.textMuted, size: 22),
+            ),
           ],
         ),
       ),
