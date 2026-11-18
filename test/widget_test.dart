@@ -15,6 +15,7 @@ import 'package:playapp_movil_flutter/presentation/screens/admin/admin_dashboard
 import 'package:playapp_movil_flutter/presentation/screens/auth/login_screen.dart';
 import 'package:playapp_movil_flutter/presentation/screens/cart/cart_screen.dart';
 import 'package:playapp_movil_flutter/presentation/screens/checkout/wompi_card_screen.dart';
+import 'package:playapp_movil_flutter/presentation/screens/home/home_screen.dart';
 import 'package:playapp_movil_flutter/presentation/screens/reviews/reviews_contact_screen.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/beach_map_widget.dart';
 import 'package:playapp_movil_flutter/presentation/widgets/product_card.dart';
@@ -228,7 +229,7 @@ void main() {
       expect(addedQty, 2);
     });
 
-    for (final width in [320.0, 375.0, 390.0, 414.0]) {
+    for (final width in [320.0, 360.0, 375.0, 390.0, 412.0, 414.0]) {
       testWidgets('ProductCard renders without RenderFlex overflow at ${width.toInt()}px width', (WidgetTester tester) async {
         tester.view.physicalSize = Size(width, 800);
         tester.view.devicePixelRatio = 1.0;
@@ -250,7 +251,8 @@ void main() {
               body: GridView.builder(
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
-                  childAspectRatio: 0.60,
+                  childAspectRatio: 0.64,
+                  mainAxisExtent: 250,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
                 ),
@@ -269,10 +271,11 @@ void main() {
       });
     }
 
-    for (final width in [320.0, 375.0, 768.0, 1200.0]) {
+    for (final width in [320.0, 360.0, 375.0, 412.0, 768.0, 1200.0]) {
       testWidgets('ResponsiveProductGrid adapts columns and does not overflow at ${width.toInt()}px width', (WidgetTester tester) async {
         tester.view.physicalSize = Size(width, 900);
         tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
         addTearDown(() => tester.view.resetPhysicalSize());
 
         final sampleProducts = [
@@ -372,6 +375,36 @@ void main() {
       expect(find.textContaining('Aprobada (4242)'), findsNothing);
       expect(find.textContaining('Rechazada (4111)'), findsNothing);
       expect(find.text('4242424242424242'), findsNothing);
+    });
+
+    testWidgets('HomeScreen headers render without overflow at 320px and 360px', (WidgetTester tester) async {
+      for (final width in [320.0, 360.0]) {
+        tester.view.physicalSize = Size(width, 800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        final auth = AuthProvider();
+        final prodProv = ProductProvider();
+        final cartProv = CartProvider();
+
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: auth),
+              ChangeNotifierProvider.value(value: prodProv),
+              ChangeNotifierProvider.value(value: cartProv),
+            ],
+            child: const MaterialApp(
+              home: HomeScreen(),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Recomendados de la Playa'), findsOneWidget);
+        expect(find.text('Categorías Playeras'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
     });
 
     testWidgets('BeachMapWidget renders Bocagrande beach sectors and interactive map controls', (WidgetTester tester) async {

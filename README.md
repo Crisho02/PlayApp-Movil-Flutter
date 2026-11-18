@@ -21,18 +21,18 @@ Aplicación móvil oficial de **PlayApp**, desarrollada en **Flutter (Android & 
    - Desglose detallado: Subtotal de productos, Tarifa de entrega a la playa (**$5.000 COP**) y Total general en pesos colombianos.
 
 4. **Entrega en Playa con Mapa Interactivo (Paso 1 Checkout):**
-   - Selector visual de playas en Cartagena: *Bocagrande (Kiosco El Bony)*, *Castillogrande (Bahía)*, *El Laguito (Hotel Hilton)*, *Marbella / Cabrero*.
-   - Mapa con radar costero y coordenadas.
+   - Selector visual de playas en Cartagena: *Playas de Bocagrande*, *Castillogrande (Bahía)*, *El Laguito (Hotel Hilton)*, *Marbella / Cabrero*.
+   - Mapa con radar costero y coordenadas reales.
    - Campos dedicados para **N° de Carpa / Mesa** y notas de referencia (ej: *"sombrilla azul"*).
    - Teléfono / WhatsApp de contacto del cliente.
 
 5. **Métodos de Pago Modernizados (Paso 2 Checkout):**
-   - **Wompi (Bancolombia) [Recomendado]:** Tarjetas débito/crédito, Nequi, PSE y Botón Bancolombia en pasarela Sandbox.
+   - **Wompi (Bancolombia) [Recomendado]:** Tarjetas débito/crédito, Nequi, PSE y Botón Bancolombia en pasarela segura.
    - **Efectivo contraentrega:** *"Paga en efectivo cuando recibas tu pedido en la playa."*
    - **Transferencia contraentrega:** *"Realiza la transferencia al recibir tu pedido."*
    - *(Eliminado por completo cualquier modo simulado o demo local).*
 
-6. **Pasarela de Prueba Wompi Sandbox:**
+6. **Pasarela de Pago Wompi:**
    - Formulario de tarjeta seguro con chips de prueba rápida:
      - **Aprobada:** `4242 4242 4242 4242`
      - **Rechazada:** `4111 1111 1111 1111`
@@ -40,11 +40,11 @@ Aplicación móvil oficial de **PlayApp**, desarrollada en **Flutter (Android & 
 
 7. **Ventana Modal de Detalle de Pedidos:**
    - Lista moderna de pedidos con etiquetas de estado dinámicas.
-   - Ventana modal interactiva para clientes y administradores con desglose completo de productos, carpa, playa, método de pago y fecha.
+   - Ventana modal interactiva para clientes y administradores con desglose completo de productos con imágenes reales, carpa, playa, método de pago y fecha.
 
 8. **Reseñas de la Comunidad & Contacto:**
-   - Calificación interactiva de 1 a 5 estrellas y publicación de opiniones de playa.
-   - Formulario de contacto directo y datos del punto de atención en Bocagrande (Cra 1, Kiosco El Bony).
+   - Calificación interactiva de 1 a 5 estrellas y publicación de opiniones de playa (muestra las 5 más recientes desde MongoDB Atlas).
+   - Formulario de contacto directo y datos del punto de atención en Playas de Bocagrande, Cartagena.
 
 9. **Panel de Administración Completo (`ROLE_ADMIN`):**
    - Validación estricta de permisos.
@@ -102,10 +102,42 @@ flutter test
 flutter run
 ```
 
-> **Tip de Conexión de Red:**
-> - En el **Emulador de Android**, la app se conecta automáticamente a `http://10.0.2.2:8080`.
-> - En **iOS Simulator / Web / Desktop**, se conecta a `http://localhost:8080`.
-> - Desde la pantalla de **Perfil y Configuración** puedes modificar la URL en cualquier momento sin recompilar.
+### 3. Modos de Conexión y Depuración por Ambiente
+
+La aplicación utiliza `EnvConfig` para resolver la conexión de forma automática y transparente sin exponer controles técnicos a los usuarios finales:
+
+1. **Celular Android Físico por USB (Modo Recomendado):**
+   Conecta tu teléfono Android por cable USB con depuración habilitada y ejecuta en tu computador:
+   ```bash
+   adb reverse tcp:8080 tcp:8080
+   flutter run
+   ```
+   *(Esto permite que las solicitudes a `127.0.0.1:8080` viajen por el cable USB directamente a tu backend Spring Boot).*
+
+2. **Celular Android Físico por Wi-Fi:**
+   Asegúrate de que tu celular y el computador estén en la misma red Wi-Fi y ejecuta:
+   ```bash
+   flutter run --dart-define=API_BASE_URL=http://<IP_DE_TU_PC>:8080
+   # Ejemplo: flutter run --dart-define=API_BASE_URL=http://192.168.1.34:8080
+   ```
+   *(La aplicación autodetecta la IP activa mediante sondeo en cascada si no se especifica el parámetro).*
+
+3. **Emulador de Android:**
+   Se conecta automáticamente a `http://10.0.2.2:8080`.
+
+4. **Flutter Web (Chrome Escritorio y Móvil):**
+   - En **Chrome de escritorio**, utiliza `http://localhost:8080`.
+   - En **Chrome móvil** conectado por red local (ej: `http://192.168.1.34:54004`), autodetecta el host del navegador y consume `http://192.168.1.34:8080` sin bloqueos de origen cruzado (CORS habilitado en Spring Boot con `@CrossOrigin(origins = "*")`).
+
+5. **Compilación para Producción (Nube / Release):**
+   Para compilar el APK o versión web final conectada a tu servidor en la nube (HTTPS seguro):
+   ```bash
+   # Generar APK de producción:
+   flutter build apk --release --dart-define=API_BASE_URL=https://tu-backend.up.railway.app
+
+   # Generar versión web de producción:
+   flutter build web --release --dart-define=API_BASE_URL=https://tu-backend.up.railway.app
+   ```
 
 ---
 
@@ -123,17 +155,18 @@ flutter run
 
 ## 🧪 Pruebas Automatizadas
 
-El proyecto incluye pruebas completas en `test/widget_test.dart`:
+El proyecto incluye 34 pruebas completas en `test/widget_test.dart`:
 - Formateo de moneda colombiana (COP).
 - Lógica de carrito: cálculo de subtotales, adición de tarifa fija de playa ($5.000 COP) y vaciado.
-- Modelos de datos: mapeo de roles de usuario y etiquetas de pedidos.
-- Componentes de interfaz: insignias de estado dinámicas y tarjeta de producto con selectores de cantidad.
+- Modelos de datos: mapeo de roles de usuario, etiquetas de pedidos y deserialización de productos MongoDB.
+- Componentes de interfaz: insignias de estado dinámicas, tarjeta de producto adaptable sin desbordamiento a 320px, 375px, 390px, 414px, 768px y 1200px.
+- Paridad administrativa: métricas, reportes ejecutivos e ingresos reales de productos más vendidos.
 
 Ejecutar pruebas:
 ```bash
 flutter test
 ```
-*Resultado: `All tests passed! (10/10)`*
+*Resultado: `All tests passed! (34/34)`*
 
 ---
 

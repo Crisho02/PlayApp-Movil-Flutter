@@ -32,49 +32,53 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
               title!,
               overflow: TextOverflow.ellipsis,
             )
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Image.asset(
-                    AppAssets.logo,
-                    height: 28,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.beach_access,
-                      color: AppColors.primary,
-                      size: 26,
+          : FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.asset(
+                      AppAssets.logo,
+                      height: 28,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.beach_access,
+                        color: AppColors.primary,
+                        size: 26,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'PLAYAPP',
-                  style: TextStyle(
-                    color: AppColors.deepNavy,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.turquoiseLight,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'CARTAGENA',
+                  const SizedBox(width: 8),
+                  const Text(
+                    'PLAYAPP',
                     style: TextStyle(
-                      color: AppColors.turquoise,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 10,
+                      color: AppColors.deepNavy,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
                       letterSpacing: 0.5,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.turquoiseLight,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'CARTAGENA',
+                      style: TextStyle(
+                        color: AppColors.turquoise,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 10,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
       actions: [
         if (extraActions != null) ...extraActions!,

@@ -191,9 +191,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 }
                               : null,
                           icon: const Icon(Icons.shopping_cart_outlined, size: 20),
-                          label: Text(
-                            'Agregar (${CurrencyFormatter.formatCOP(p.precio * _quantity)})',
-                            style: const TextStyle(fontSize: 14),
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              'Agregar (${CurrencyFormatter.formatCOP(p.precio * _quantity)})',
+                              style: const TextStyle(fontSize: 14),
+                            ),
                           ),
                         ),
                       ),

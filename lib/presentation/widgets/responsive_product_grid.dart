@@ -50,10 +50,10 @@ class ResponsiveProductGrid extends StatelessWidget {
             (width - horizontalPadding - (spacing * (crossAxisCount - 1))) /
                 crossAxisCount;
 
-        // Proporción exacta según contenido real para evitar áreas blancas vacías:
+        // Proporción exacta según contenido real para evitar áreas blancas vacías y desbordes:
         // - Imagen (relación 4:3): itemWidth * 0.75
-        // - Textos y botones compactos: ~118px
-        final double estimatedCardHeight = (itemWidth * 0.75) + 118;
+        // - Textos y controles de compra: 132px de altura confortable
+        final double estimatedCardHeight = (itemWidth * 0.75) + 132;
         final double childAspectRatio = itemWidth / estimatedCardHeight;
 
         final Widget grid = GridView.builder(
@@ -63,6 +63,7 @@ class ResponsiveProductGrid extends StatelessWidget {
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
             childAspectRatio: childAspectRatio,
+            mainAxisExtent: estimatedCardHeight,
             crossAxisSpacing: spacing,
             mainAxisSpacing: spacing,
           ),

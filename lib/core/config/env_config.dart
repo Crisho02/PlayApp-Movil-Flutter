@@ -23,12 +23,25 @@ class EnvConfig {
       return _resolvedBaseUrl;
     }
     if (kIsWeb) {
+      final currentUri = Uri.base;
+      if (currentUri.scheme == 'https') {
+        return 'https://${currentUri.host}';
+      }
+      if (currentUri.host.isNotEmpty &&
+          currentUri.host != 'localhost' &&
+          currentUri.host != '127.0.0.1') {
+        return 'http://${currentUri.host}:8080';
+      }
       return 'http://localhost:8080';
     }
     if (defaultTargetPlatform == TargetPlatform.android) {
-      // 127.0.0.1 funciona directamente en dispositivo físico con:
-      // adb reverse tcp:8080 tcp:8080
+      if (kReleaseMode) {
+        return 'https://playapp-api.up.railway.app';
+      }
       return 'http://127.0.0.1:8080';
+    }
+    if (kReleaseMode) {
+      return 'https://playapp-api.up.railway.app';
     }
     return 'http://localhost:8080';
   }
@@ -45,6 +58,17 @@ class EnvConfig {
       return _resolvedBaseUrl;
     }
     if (kIsWeb) {
+      final currentUri = Uri.base;
+      if (currentUri.scheme == 'https') {
+        _resolvedBaseUrl = 'https://${currentUri.host}';
+        return _resolvedBaseUrl;
+      }
+      if (currentUri.host.isNotEmpty &&
+          currentUri.host != 'localhost' &&
+          currentUri.host != '127.0.0.1') {
+        _resolvedBaseUrl = 'http://${currentUri.host}:8080';
+        return _resolvedBaseUrl;
+      }
       _resolvedBaseUrl = 'http://localhost:8080';
       return _resolvedBaseUrl;
     }
@@ -52,13 +76,20 @@ class EnvConfig {
       return _resolvedBaseUrl;
     }
 
+    if (kReleaseMode) {
+      _resolvedBaseUrl = 'https://playapp-api.up.railway.app';
+      return _resolvedBaseUrl;
+    }
+
     if (defaultTargetPlatform == TargetPlatform.android) {
       // Candidatos ordenados por probabilidad de uso en desarrollo móvil:
       // 1. 127.0.0.1:8080 (USB con adb reverse tcp:8080 tcp:8080)
-      // 2. 192.168.1.88:8080 (Wi-Fi en red local del computador anfitrión)
-      // 3. 10.0.2.2:8080 (Emulador Android estándar)
+      // 2. 192.168.1.34:8080 (Wi-Fi en red local del computador anfitrión)
+      // 3. 192.168.1.88:8080 (Wi-Fi alternativo)
+      // 4. 10.0.2.2:8080 (Emulador Android estándar)
       final candidates = [
         'http://127.0.0.1:8080',
+        'http://192.168.1.34:8080',
         'http://192.168.1.88:8080',
         'http://10.0.2.2:8080',
       ];
