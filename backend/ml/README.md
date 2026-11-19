@@ -71,6 +71,12 @@ Noche: ajuste posterior de política 0–1 %, identificado como `night_policy_ap
 El rango no significa certeza de ausencia de personas. El simulador supone sol 06–18;
 en producción Java usa amanecer/atardecer de la API y envía su hora de observación.
 
+`GET /analytics` (solo lectura) ejecuta el modelo cargado sobre escenarios sintéticos fijos
+(24 horas × tipo de día × clima, semana completa por temporada y sensibilidad de variables)
+y devuelve JSON para las gráficas de la app móvil (`analytics.py`). Java lo expone a los
+administradores en `GET /api/admin/prediction/analytics` y guarda el resultado 30 min.
+Las cifras describen el comportamiento del modelo, no mediciones reales de la playa.
+
 Clima fuera de dominio (nieve, humo, polvo, etc.), visibilidad ausente para niebla,
 inputs inválidos, servicio caído o respuesta incorrecta: Java conserva reglas de
 respaldo y muestra esa procedencia. Los datos del clima conservan su caché de 10 min.

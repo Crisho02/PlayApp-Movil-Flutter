@@ -6,6 +6,7 @@ import '../core/storage/session_manager.dart';
 import '../data/models/admin_report_model.dart';
 import '../data/models/admin_user_model.dart';
 import '../data/models/admin_weather_model.dart';
+import '../data/models/occupancy_analytics_model.dart';
 import '../data/models/order_model.dart';
 import '../data/models/review_model.dart';
 
@@ -23,6 +24,15 @@ class AdminProvider extends ChangeNotifier {
   // Prediction state
   bool _isPredicting = false;
   Map<String, dynamic>? _lastPredictionResult;
+
+  // Occupancy neural-network analytics state
+  OccupancyAnalytics? _occupancyAnalytics;
+  bool _isAnalyticsLoading = false;
+  String? _analyticsError;
+
+  OccupancyAnalytics? get occupancyAnalytics => _occupancyAnalytics;
+  bool get isAnalyticsLoading => _isAnalyticsLoading;
+  String? get analyticsError => _analyticsError;
 
   List<OrderModel> get adminOrders => _adminOrders;
   Map<String, dynamic> get metrics => _metrics;
@@ -107,6 +117,40 @@ class AdminProvider extends ChangeNotifier {
         }
       }
     } catch (_) {}
+  }
+
+  /// Carga las gráficas de la red neuronal. Si ya hay datos válidos no vuelve a pedirlos salvo [force].
+  Future<void> fetchOccupancyAnalytics({bool force = false}) async {
+    if (_isAnalyticsLoading) return;
+    if (_occupancyAnalytics != null && !force) return;
+    final correo = _getAdminEmail();
+    if (correo == null) return;
+
+    _isAnalyticsLoading = true;
+    _analyticsError = null;
+    notifyListeners();
+
+    try {
+      final res = await ApiClient.get<Map<String, dynamic>>(
+        ApiEndpoints.adminPredictionAnalytics,
+        queryParameters: {'correo': correo},
+      );
+      if (res.success && res.data != null) {
+        final parsed = OccupancyAnalytics.tryParse(res.data!);
+        if (parsed != null) {
+          _occupancyAnalytics = parsed;
+        } else {
+          _analyticsError = 'El modelo devolvió datos incompletos. Intenta nuevamente.';
+        }
+      } else {
+        _analyticsError = res.message ?? 'No fue posible cargar las gráficas del modelo.';
+      }
+    } catch (_) {
+      _analyticsError = 'No fue posible cargar las gráficas del modelo.';
+    }
+
+    _isAnalyticsLoading = false;
+    notifyListeners();
   }
 
   Future<void> fetchReports() async {

@@ -9,6 +9,7 @@ import com.proyecto.PlayApp.repository.PedidoRepository;
 import com.proyecto.PlayApp.repository.ProductoRepository;
 import com.proyecto.PlayApp.repository.UsuarioRepository;
 import com.proyecto.PlayApp.service.CurrentWeatherService;
+import com.proyecto.PlayApp.service.OccupancyAnalyticsService;
 import com.proyecto.PlayApp.service.PedidoService;
 import com.proyecto.PlayApp.service.ProductoService;
 import com.proyecto.PlayApp.service.ReporteService;
@@ -36,6 +37,7 @@ public class ApiAdminController {
     private final UsuarioRepository usuarioRepository;
     private final ReporteService reporteService;
     private final CurrentWeatherService currentWeatherService;
+    private final OccupancyAnalyticsService occupancyAnalyticsService;
 
     @Value("${playapp.admin.email:adminplayapp01@gmail.com}")
     private String adminGlobalCorreo;
@@ -277,5 +279,17 @@ public class ApiAdminController {
         }
 
         return ResponseEntity.ok(metricas);
+    }
+
+    @GetMapping("/prediction/analytics")
+    public ResponseEntity<?> analiticaPrediccion(@RequestParam(name = "correo") String correo) {
+        if (!validarAdmin(correo)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "No tienes permisos de administrador"));
+        }
+        return occupancyAnalyticsService.get()
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(Map.of("error", "El modelo de red neuronal no está disponible en este momento.")));
     }
 }

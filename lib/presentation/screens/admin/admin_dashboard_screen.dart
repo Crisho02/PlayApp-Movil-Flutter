@@ -14,6 +14,7 @@ import '../../../data/models/review_model.dart';
 import '../../../providers/admin_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/product_provider.dart';
+import '../../widgets/occupancy_analytics/occupancy_analytics_section.dart';
 import '../../widgets/order_detail_modal.dart';
 import '../../widgets/status_badge.dart';
 
@@ -1702,6 +1703,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 ],
               ),
             ),
+            const SizedBox(height: 20),
+
+            // Análisis de la red neuronal (gráficas interactivas)
+            const OccupancyAnalyticsSection(),
             const SizedBox(height: 24),
 
             // Mapa de Monitoreo

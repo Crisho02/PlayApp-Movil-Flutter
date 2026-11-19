@@ -31,6 +31,7 @@ class ApiEndpoints {
   static const String adminMetrics = '/api/admin/metrics';
   static const String adminReports = '/api/admin/reports';
   static const String adminPredictionSales = '/api/admin/prediction/sales';
+  static const String adminPredictionAnalytics = '/api/admin/prediction/analytics';
   static const String adminUsers = '/api/admin/users';
   static const String adminUsersCreate = '/api/admin/users/create';
   static const String adminReviews = '/api/admin/reviews';
