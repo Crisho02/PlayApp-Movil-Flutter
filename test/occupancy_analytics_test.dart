@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:playapp_movil_flutter/data/models/admin_weather_model.dart';
 import 'package:playapp_movil_flutter/data/models/occupancy_analytics_model.dart';
 import 'package:playapp_movil_flutter/data/models/user_model.dart';
 import 'package:playapp_movil_flutter/presentation/screens/admin/admin_dashboard_screen.dart';
@@ -29,8 +30,12 @@ class FakeAdminProvider extends AdminProvider {
   int fetchCalls = 0;
   bool lastForce = false;
 
-  FakeAdminProvider({this.fakeData, this.fakeError, this.fakeLoading = false});
+  AdminWeatherModel? fakeWeather;
 
+  FakeAdminProvider({this.fakeData, this.fakeError, this.fakeLoading = false, this.fakeWeather});
+
+  @override
+  AdminWeatherModel? get weather => fakeWeather;
   @override
   OccupancyAnalytics? get occupancyAnalytics => fakeData;
   @override
@@ -389,6 +394,95 @@ void main() {
         expectClean(tester);
       });
     }
+  });
+
+  group('Tarjeta "Ocupación Estimada en Playa"', () {
+    // Estructura real devuelta por /api/admin/metrics (clima) del backend PlayApp-main.
+    Map<String, dynamic> clima({bool withPrediction = true, bool withEstimate = true}) => {
+          'description': 'nubes dispersas',
+          'observedAt': '19/11/2026 16:59:00',
+          'consultedAt': '19/11/2026 16:59:01',
+          'metrics': [
+            {'label': 'Temperatura', 'value': '32,0 °C'},
+            {'label': 'Viento', 'value': '11,1 km/h'},
+          ],
+          if (withEstimate)
+            'estimate': {
+              'minimum': 50,
+              'maximum': 70,
+              'condition': 'Parcialmente nublado y cálido',
+              'explanation': 'Explicación de las reglas.',
+              'summary': 'El ambiente cálido con nubes parciales favorece una afluencia moderada a alta.',
+            },
+          'artwork': {'night': false},
+          'prediction': withPrediction ? {'percentage': 28.6, 'version': 'sim-v1-6556cf29a859'} : null,
+        };
+
+    test('el modelo lee la predicción de la red neuronal y descarta valores inválidos', () {
+      final w = AdminWeatherModel.fromJson(clima());
+      expect(w.prediction!.percentage, 28.6);
+      expect(w.prediction!.formatted, '28,6 %');
+      expect(w.estimate!.maximum, 70, reason: 'las reglas se siguen leyendo igual');
+      expect(AdminWeatherModel.fromJson(clima(withPrediction: false)).prediction, isNull);
+      expect(AdminNeuralPrediction.tryParse({'percentage': 101}), isNull);
+      expect(AdminNeuralPrediction.tryParse({'percentage': -1}), isNull);
+      expect(AdminNeuralPrediction.tryParse({'percentage': 'x'}), isNull);
+      expect(AdminNeuralPrediction.tryParse('x'), isNull);
+      expect(AdminNeuralPrediction.tryParse({'percentage': 0.4})!.formatted, '0,4 %');
+    });
+
+    Future<void> pumpWeatherTab(WidgetTester tester, AdminWeatherModel? weather) async {
+      // Superficie ancha: la fuente de prueba (Ahem) desborda la tarjeta de clima existente (ver test de integración).
+      tester.view.physicalSize = const Size(700, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final auth = AuthProvider();
+      auth.updateProfileLocally(
+        UserModel(id: 'admin_1', nombre: 'Admin PlayApp', email: 'adminplayapp01@gmail.com', rol: 'ROLE_ADMIN', isAdmin: true),
+      );
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: auth),
+            ChangeNotifierProvider<AdminProvider>.value(value: FakeAdminProvider(fakeData: loadAnalytics(), fakeWeather: weather)),
+            ChangeNotifierProvider.value(value: ProductProvider()),
+          ],
+          child: const MaterialApp(home: AdminDashboardScreen()),
+        ),
+      );
+      await tester.pump();
+      await tester.ensureVisible(find.text('Clima & Afluencia'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Clima & Afluencia'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('con red neuronal: muestra su valor como dato principal y las reglas como respaldo', (tester) async {
+      await pumpWeatherTab(tester, AdminWeatherModel.fromJson(clima()));
+      expect(find.text('28,6 %'), findsOneWidget);
+      expect(find.text('Red neuronal'), findsOneWidget);
+      expect(find.text('Según Clima'), findsNothing);
+      expect(find.textContaining('Reglas de respaldo: 50 % – 70 %'), findsOneWidget);
+      expect(find.text('0 % – 1 %'), findsNothing);
+    });
+
+    testWidgets('sin red neuronal: se comporta como antes (rango por reglas)', (tester) async {
+      await pumpWeatherTab(tester, AdminWeatherModel.fromJson(clima(withPrediction: false)));
+      expect(find.text('50 % – 70 %'), findsOneWidget);
+      expect(find.text('Según Clima'), findsOneWidget);
+      expect(find.text('Red neuronal'), findsNothing);
+      expect(find.textContaining('Reglas de respaldo'), findsNothing);
+    });
+
+    testWidgets('sin clima en vivo: dice "Sin datos" en lugar de un falso 0 % – 1 %', (tester) async {
+      await pumpWeatherTab(tester, null);
+      expect(find.text('Sin datos'), findsOneWidget);
+      expect(find.text('0 % – 1 %'), findsNothing);
+      expect(find.textContaining('No fue posible obtener el clima en vivo'), findsOneWidget);
+    });
   });
 
   group('Integración en el panel admin', () {

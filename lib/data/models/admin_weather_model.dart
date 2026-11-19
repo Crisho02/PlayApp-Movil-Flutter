@@ -41,12 +41,33 @@ class AdminWeatherEstimate {
   }
 }
 
+/// Predicción en vivo de la red neuronal (campo `prediction` del backend).
+/// Es null cuando el modelo no responde: entonces la app usa las reglas de respaldo.
+class AdminNeuralPrediction {
+  final double percentage;
+  final String version;
+
+  AdminNeuralPrediction({required this.percentage, required this.version});
+
+  /// Devuelve null si el valor no es un porcentaje válido (0–100).
+  static AdminNeuralPrediction? tryParse(dynamic json) {
+    if (json is! Map) return null;
+    final p = json['percentage'];
+    if (p is! num || !p.isFinite || p < 0 || p > 100) return null;
+    return AdminNeuralPrediction(percentage: p.toDouble(), version: (json['version'] ?? '').toString());
+  }
+
+  /// Ej.: "28,6 %"
+  String get formatted => '${percentage.toStringAsFixed(1).replaceAll('.', ',')} %';
+}
+
 class AdminWeatherModel {
   final String description;
   final String observedAt;
   final String consultedAt;
   final List<AdminWeatherMetric> metrics;
   final AdminWeatherEstimate? estimate;
+  final AdminNeuralPrediction? prediction;
   final bool isNight;
   final double latitude;
   final double longitude;
@@ -57,6 +78,7 @@ class AdminWeatherModel {
     required this.consultedAt,
     required this.metrics,
     this.estimate,
+    this.prediction,
     this.isNight = false,
     this.latitude = 10.399667,
     this.longitude = -75.555001,
@@ -186,6 +208,7 @@ class AdminWeatherModel {
       consultedAt: (json['consultedAt'] ?? '').toString(),
       metrics: metricsList,
       estimate: est,
+      prediction: AdminNeuralPrediction.tryParse(json['prediction']),
       isNight: night,
       latitude: lat,
       longitude: lon,

@@ -1603,12 +1603,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
+                          color: (weather?.prediction != null ? AppColors.turquoise : AppColors.primary).withOpacity(0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Text(
-                          'Según Clima',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
+                        child: Text(
+                          weather?.prediction != null ? 'Red neuronal' : 'Según Clima',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: weather?.prediction != null ? const Color(0xFF0F766E) : AppColors.primaryDark,
+                          ),
                         ),
                       ),
                     ],
@@ -1616,9 +1620,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   const SizedBox(height: 12),
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final occupationRange = (weather?.estimate != null)
-                          ? '${weather!.estimate!.minimum} % – ${weather.estimate!.maximum} %'
-                          : '0 % – 1 %';
+                      // Prioridad: red neuronal en vivo > rango por reglas > sin datos del clima.
+                      final occupationRange = weather?.prediction != null
+                          ? weather!.prediction!.formatted
+                          : (weather?.estimate != null)
+                              ? '${weather!.estimate!.minimum} % – ${weather.estimate!.maximum} %'
+                              : 'Sin datos';
                       final conditionText = weather?.estimate?.condition ??
                           (weather?.isNight == true ? 'Noche' : 'Condición óptima');
 
@@ -1671,18 +1678,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   ),
                   const SizedBox(height: 10),
                   LinearProgressIndicator(
-                    value: (weather?.estimate != null)
-                        ? (weather!.estimate!.maximum / 100.0).clamp(0.02, 1.0)
-                        : 0.05,
+                    value: weather?.prediction != null
+                        ? (weather!.prediction!.percentage / 100.0).clamp(0.02, 1.0)
+                        : (weather?.estimate != null)
+                            ? (weather!.estimate!.maximum / 100.0).clamp(0.02, 1.0)
+                            : 0.0,
                     backgroundColor: AppColors.sandBackground,
                     color: AppColors.turquoise,
                     minHeight: 8,
                     borderRadius: BorderRadius.circular(4),
                   ),
+                  if (weather?.prediction != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      weather!.estimate != null
+                          ? 'Estimación de la red neuronal con el clima, la hora y el calendario actuales. '
+                              'Reglas de respaldo: ${weather.estimate!.minimum} % – ${weather.estimate!.maximum} %.'
+                          : 'Estimación de la red neuronal con el clima, la hora y el calendario actuales.',
+                      style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted, height: 1.35),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Text(
                     weather?.estimate?.summary ??
-                        'Durante las condiciones actuales se espera afluencia regular y moderada en la playa de Bocagrande.',
+                        'No fue posible obtener el clima en vivo. Desliza hacia abajo para actualizar.',
                     style: const TextStyle(fontSize: 13, color: AppColors.textMain, height: 1.4),
                   ),
                   if (weather?.estimate?.explanation != null &&
