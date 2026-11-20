@@ -315,6 +315,13 @@ class _FullError extends StatelessWidget {
           const Icon(Icons.cloud_off_rounded, size: 32, color: AppColors.textLight),
           const SizedBox(height: 10),
           Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: AppColors.textMuted, height: 1.35)),
+          const SizedBox(height: 8),
+          const Text(
+            'Verifica que el backend de PlayApp esté encendido (start-playapp.bat en la carpeta backend) '
+            'y que sea la versión actualizada del repositorio.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 11.5, color: AppColors.textLight, height: 1.35),
+          ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: onRetry,

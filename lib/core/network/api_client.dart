@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/env_config.dart';
@@ -97,14 +98,25 @@ class ApiClient {
     }
   }
 
+  /// El servidor respondió, pero no con el JSON esperado (por ejemplo, una página HTML porque
+  /// esa ruta no existe en el backend que está corriendo).
+  static const String unexpectedFormatMessage =
+      'El servidor respondió en un formato inesperado. Verifica que el backend de PlayApp esté actualizado.';
+
+  /// La petición superó el tiempo máximo de espera.
+  static const String timeoutMessage = 'El servidor de PlayApp tardó demasiado en responder. Intenta nuevamente.';
+
+  /// [timeout] es opcional; por defecto 10 segundos (comportamiento de siempre).
+  /// statusCode 0 significa que no hubo respuesta del servidor (sin conexión o tiempo agotado).
   static Future<ApiResponse<T>> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
     T Function(dynamic json)? parser,
+    Duration timeout = const Duration(seconds: 10),
   }) async {
     try {
       final response = await _executeWithFallback(
-        (uri) => _client.get(uri, headers: _buildHeaders()).timeout(const Duration(seconds: 10)),
+        (uri) => _client.get(uri, headers: _buildHeaders()).timeout(timeout),
         path,
         queryParameters,
       );
@@ -112,8 +124,13 @@ class ApiClient {
       _captureCookie(response);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        final data = parser != null ? parser(decoded) : decoded as T;
+        final T data;
+        try {
+          final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+          data = parser != null ? parser(decoded) : decoded as T;
+        } catch (_) {
+          return ApiResponse(success: false, message: unexpectedFormatMessage, statusCode: response.statusCode);
+        }
         return ApiResponse(success: true, data: data, statusCode: response.statusCode);
       } else {
         String msg = 'No fue posible completar la solicitud.';
@@ -125,6 +142,8 @@ class ApiClient {
         } catch (_) {}
         return ApiResponse(success: false, message: msg, statusCode: response.statusCode);
       }
+    } on TimeoutException {
+      return ApiResponse(success: false, message: timeoutMessage, statusCode: 0);
     } catch (_) {
       return ApiResponse(
         success: false,

@@ -7,20 +7,22 @@ import com.proyecto.PlayApp.entity.Producto;
 import com.proyecto.PlayApp.entity.Usuario;
 import com.proyecto.PlayApp.repository.PedidoRepository;
 import com.proyecto.PlayApp.repository.ProductoRepository;
+import com.proyecto.PlayApp.repository.ResenaRepository;
 import com.proyecto.PlayApp.repository.UsuarioRepository;
-import com.proyecto.PlayApp.service.CurrentWeatherService;
-import com.proyecto.PlayApp.service.PedidoService;
-import com.proyecto.PlayApp.service.ProductoService;
-import com.proyecto.PlayApp.service.ReporteService;
+import com.proyecto.PlayApp.service.*;
 import lombok.RequiredArgsConstructor;
 import org.bson.BsonBinarySubType;
 import org.bson.types.Binary;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 
 @RestController
@@ -36,6 +38,10 @@ public class ApiAdminController {
     private final UsuarioRepository usuarioRepository;
     private final ReporteService reporteService;
     private final CurrentWeatherService currentWeatherService;
+    private final WekaPredictionService wekaPredictionService;
+    private final ResenaRepository resenaRepository;
+    private final UsuarioService usuarioService;
+    private final SalesChartsService salesChartsService;
 
     @Value("${playapp.admin.email:adminplayapp01@gmail.com}")
     private String adminGlobalCorreo;
@@ -176,11 +182,52 @@ public class ApiAdminController {
                 if (cleanBase64.contains(",")) {
                     String[] parts = cleanBase64.split(",");
                     if (parts[0].contains("image/png")) contentType = "image/png";
+                    else if (parts[0].contains("image/webp")) contentType = "image/webp";
                     cleanBase64 = parts[1];
                 }
                 byte[] decoded = Base64.getDecoder().decode(cleanBase64);
                 nuevo.setImagen(new Binary(BsonBinarySubType.BINARY, decoded));
                 nuevo.setImagenContentType(contentType);
+            } catch (Exception ignored) {}
+        }
+
+        Producto guardado = productoService.crearProducto(nuevo, correo.trim());
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "success", true,
+                "id", guardado.getId(),
+                "nombre", guardado.getNombre(),
+                "mensaje", "Producto creado exitosamente"
+        ));
+    }
+
+    @PostMapping(value = "/products/multipart", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> crearProductoMultipart(
+            @RequestParam("nombre") String nombre,
+            @RequestParam("descripcion") String descripcion,
+            @RequestParam("precio") Double precio,
+            @RequestParam(name = "stock", defaultValue = "10.0") Double stock,
+            @RequestParam(name = "categoria", defaultValue = "1") Integer categoria,
+            @RequestParam(name = "tipo", defaultValue = "1") Integer tipo,
+            @RequestParam(name = "correo") String correo,
+            @RequestParam(name = "imagen", required = false) MultipartFile imagen
+    ) {
+        if (!validarAdmin(correo)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "No tienes permisos de administrador"));
+        }
+
+        Producto nuevo = new Producto();
+        nuevo.setNombre(nombre);
+        nuevo.setDescripcion(descripcion);
+        nuevo.setPrecio(precio);
+        nuevo.setStock(stock);
+        nuevo.setCategoria(categoria);
+        nuevo.setTipo(tipo);
+
+        if (imagen != null && !imagen.isEmpty()) {
+            try {
+                nuevo.setImagen(new Binary(BsonBinarySubType.BINARY, imagen.getBytes()));
+                nuevo.setImagenContentType(imagen.getContentType() != null ? imagen.getContentType() : "image/jpeg");
             } catch (Exception ignored) {}
         }
 
@@ -216,13 +263,17 @@ public class ApiAdminController {
         if (body.containsKey("stock")) existente.setStock(((Number) body.get("stock")).doubleValue());
         if (body.containsKey("categoria")) existente.setCategoria(((Number) body.get("categoria")).intValue());
 
-        if (body.containsKey("base64Image") && body.get("base64Image") != null) {
+        if (body.containsKey("removeImage") && Boolean.TRUE.equals(body.get("removeImage"))) {
+            existente.setImagen(null);
+            existente.setImagenContentType(null);
+        } else if (body.containsKey("base64Image") && body.get("base64Image") != null) {
             try {
                 String cleanBase64 = (String) body.get("base64Image");
                 String contentType = "image/jpeg";
                 if (cleanBase64.contains(",")) {
                     String[] parts = cleanBase64.split(",");
                     if (parts[0].contains("image/png")) contentType = "image/png";
+                    else if (parts[0].contains("image/webp")) contentType = "image/webp";
                     cleanBase64 = parts[1];
                 }
                 byte[] decoded = Base64.getDecoder().decode(cleanBase64);
@@ -238,6 +289,42 @@ public class ApiAdminController {
                 "nombre", guardado.getNombre(),
                 "mensaje", "Producto actualizado exitosamente"
         ));
+    }
+
+    @PostMapping(value = "/products/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> subirImagenProducto(
+            @PathVariable String id,
+            @RequestParam("imagen") MultipartFile imagen,
+            @RequestParam(name = "correo") String correo
+    ) {
+        if (!validarAdmin(correo)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "No tienes permisos de administrador"));
+        }
+
+        Optional<Producto> opt = productoService.buscarProductoPorId(id);
+        if (opt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "Producto no encontrado"));
+        }
+
+        try {
+            if (!imagen.isEmpty()) {
+                Producto producto = opt.get();
+                producto.setImagen(new Binary(BsonBinarySubType.BINARY, imagen.getBytes()));
+                producto.setImagenContentType(imagen.getContentType() != null ? imagen.getContentType() : "image/jpeg");
+                productoRepository.save(producto);
+                return ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "imageUrl", "/api/products/" + id + "/image",
+                        "mensaje", "Imagen subida exitosamente"
+                ));
+            } else {
+                return ResponseEntity.badRequest().body(Map.of("error", "Archivo de imagen vacío"));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error procesando la imagen: " + e.getMessage()));
+        }
     }
 
     @DeleteMapping("/products/{id}")
@@ -277,5 +364,169 @@ public class ApiAdminController {
         }
 
         return ResponseEntity.ok(metricas);
+    }
+
+    @GetMapping("/reports")
+    public ResponseEntity<?> obtenerReportesAdmin(@RequestParam(name = "correo") String correo) {
+        if (!validarAdmin(correo)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "No tienes permisos de administrador"));
+        }
+
+        Map<String, Object> reports = new HashMap<>();
+        try {
+            reports.put("pedidos", reporteService.reportePedidos(correo.trim()));
+            reports.put("productosTop", reporteService.productosTop(10, correo.trim()));
+            reports.put("ingresosMensuales", reporteService.ingresosMensuales(correo.trim()));
+        } catch (Exception e) {
+            reports.put("pedidos", Map.of("totalPedidos", 0, "totalIngresos", 0.0));
+            reports.put("productosTop", List.of());
+            reports.put("ingresosMensuales", List.of());
+        }
+        return ResponseEntity.ok(reports);
+    }
+
+    @PostMapping("/prediction/sales")
+    public ResponseEntity<?> predecirVenta(@RequestBody Map<String, Object> body) {
+        String correo = (String) body.get("correo");
+        if (!validarAdmin(correo)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "No tienes permisos de administrador"));
+        }
+
+        String diaSemana = (String) body.getOrDefault("diaSemana", "Viernes");
+        if (diaSemana != null) {
+            diaSemana = diaSemana.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u");
+            diaSemana = diaSemana.replace("Á", "A").replace("É", "E").replace("Í", "I").replace("Ó", "O").replace("Ú", "U");
+        }
+        String producto = (String) body.getOrDefault("producto", "Cerveza Club Colombia");
+        String categoria = (String) body.getOrDefault("categoria", "Bebida");
+        int precio = body.get("precio") != null ? ((Number) body.get("precio")).intValue() : 7000;
+        String clima = (String) body.getOrDefault("clima", "Soleado");
+        String temporada = (String) body.getOrDefault("temporada", "Alta");
+
+        try {
+            double resultado = wekaPredictionService.predecirVenta(
+                    diaSemana, producto, categoria, precio, clima, temporada
+            );
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "prediccion", resultado,
+                    "unidades", Math.round(resultado * 100.0) / 100.0,
+                    "producto", producto,
+                    "diaSemana", diaSemana
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error calculando la predicción: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/users")
+    public ResponseEntity<?> listarUsuariosAdmin(@RequestParam(name = "correo") String correo) {
+        if (!validarAdmin(correo)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "No tienes permisos de administrador"));
+        }
+
+        List<Usuario> usuarios = usuarioRepository.findAll();
+        List<Map<String, Object>> res = new ArrayList<>();
+        for (Usuario u : usuarios) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", u.getId());
+            map.put("nombre", u.getNombreCompleto() != null ? u.getNombreCompleto() : "");
+            map.put("correo", u.getCorreo() != null ? u.getCorreo() : "");
+            map.put("rol", u.getRol() != null ? u.getRol() : "ROLE_USER");
+            map.put("esAdmin", "ROLE_ADMIN".equalsIgnoreCase(u.getRol()) || adminGlobalCorreo.equalsIgnoreCase(u.getCorreo()));
+            res.add(map);
+        }
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/users/create")
+    public ResponseEntity<?> crearAdmin(@RequestBody Map<String, Object> body) {
+        String adminCorreo = (String) body.get("adminCorreo");
+        if (!validarAdmin(adminCorreo)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "No tienes permisos de administrador global"));
+        }
+
+        String nombreCompleto = (String) body.get("nombreCompleto");
+        String correo = (String) body.get("correo");
+        String password = (String) body.get("password");
+
+        if (nombreCompleto == null || correo == null || password == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Todos los campos son obligatorios"));
+        }
+
+        Usuario nuevo = new Usuario();
+        nuevo.setNombreCompleto(nombreCompleto.trim());
+        nuevo.setCorreo(correo.trim());
+        nuevo.setPassword(password);
+
+        try {
+            usuarioService.createRestaurant(nuevo);
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                    "success", true,
+                    "mensaje", "Administrador registrado correctamente"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", e.getMessage() != null ? e.getMessage() : "Error al registrar el administrador"
+            ));
+        }
+    }
+
+    @GetMapping("/reviews")
+    public ResponseEntity<?> listarResenasAdmin(@RequestParam(name = "correo") String correo) {
+        if (!validarAdmin(correo)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "No tienes permisos de administrador"));
+        }
+
+        return ResponseEntity.ok(resenaRepository.findAllByOrderByFechaDesc());
+    }
+
+    @DeleteMapping("/reviews/{id}")
+    public ResponseEntity<?> eliminarResena(
+            @PathVariable String id,
+            @RequestParam(name = "correo") String correo
+    ) {
+        if (!validarAdmin(correo)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "No tienes permisos de administrador"));
+        }
+
+        resenaRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("success", true, "mensaje", "Reseña eliminada correctamente"));
+    }
+
+    /**
+     * Datos de la pestaña "Gráficos" de la app móvil, calculados en vivo desde MongoDB.
+     * rango: 7d | 30d | 90d | 365d | todo | personalizado (con desde y hasta en formato AAAA-MM-DD).
+     * granularidad: auto | day | week | month. categoria: 1 Comida, 2 Bebida, 3 Servicio (opcional).
+     */
+    @GetMapping("/charts")
+    public ResponseEntity<?> graficos(
+            @RequestParam(name = "correo") String correo,
+            @RequestParam(name = "rango", defaultValue = "30d") String rango,
+            @RequestParam(name = "desde", required = false) String desde,
+            @RequestParam(name = "hasta", required = false) String hasta,
+            @RequestParam(name = "categoria", required = false) Integer categoria,
+            @RequestParam(name = "granularidad", defaultValue = "auto") String granularidad
+    ) {
+        if (!validarAdmin(correo)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "No tienes permisos de administrador"));
+        }
+        try {
+            LocalDate fechaDesde = desde == null || desde.isBlank() ? null : LocalDate.parse(desde.trim());
+            LocalDate fechaHasta = hasta == null || hasta.isBlank() ? null : LocalDate.parse(hasta.trim());
+            return ResponseEntity.ok(salesChartsService.build(correo.trim(), rango, fechaDesde, fechaHasta, categoria, granularidad));
+        } catch (DateTimeParseException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Formato de fecha no válido. Usa AAAA-MM-DD."));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 }

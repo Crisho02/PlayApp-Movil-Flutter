@@ -53,6 +53,11 @@ Aplicación móvil oficial de **PlayApp**, desarrollada en **Flutter (Android & 
    - Gestión de pedidos: actualización de estado (*Recibido* ➔ *En preparación* ➔ *Terminado* ➔ *Cancelado*) y marcado como pagado.
    - Gestión de productos (crear, editar precio/stock y eliminar platos).
 
+10. **Pestaña "Gráficos" (datos en vivo desde la base de datos):**
+   - Indicadores con comparación frente al periodo anterior, tendencia de ventas, productos más y menos vendidos, comparador de productos, Pareto 80/20, mapa de calor día × hora y mix por categoría.
+   - Filtros por rango (7 días, 30 días, 90 días, 1 año, todo o personalizado) y por categoría.
+   - Requiere el backend de la carpeta `backend/` (endpoint `GET /api/admin/charts`).
+
 ---
 
 ## 🏛️ Arquitectura & Seguridad
@@ -66,23 +71,33 @@ Aplicación móvil oficial de **PlayApp**, desarrollada en **Flutter (Android & 
   - La aplicación Flutter **no se conecta directamente a MongoDB Atlas**.
   - Todas las operaciones pasan por la API REST del backend Spring Boot.
   - No se exponen llaves privadas ni credenciales de base de datos en el cliente móvil.
-- **Copia Reproducible del Backend:**
-  - Incluido en la carpeta `backend/` con Maven Wrapper (`./mvnw`) y endpoints REST `/api/**` listos para ser levantados de manera autónoma.
+- **Backend completo incluido:**
+  - La carpeta `backend/` contiene el backend Spring Boot que usa la app: API REST `/api/**`, pestaña Gráficos, modelo predictivo de ventas (Weka) y red neuronal de ocupación (`backend/ml`).
 
 ---
 
 ## 🚀 Guía de Instalación y Ejecución
 
-### 1. Iniciar el Backend Spring Boot
+### 1. Iniciar el Backend Spring Boot (carpeta `backend/`)
 
-Asegúrate de contar con Java 21 y ejecuta:
+1. **Claves (solo la primera vez).** Copia la plantilla y complétala con los datos del equipo. Este archivo **no se sube a GitHub**:
+   ```powershell
+   cd backend
+   copy config\application-secrets.env.example config\application-secrets.env
+   ```
+2. **Iniciar.** El script carga las claves, usa un Java 21 local si no tienes uno instalado, levanta Redis con Docker Desktop (o usa el Redis configurado) e intenta iniciar la red neuronal:
+   ```powershell
+   .\start-playapp.bat
+   ```
+   El servidor queda en `http://localhost:8080`, que es donde lo busca la app. Si el script avisa que el puerto 8080 está ocupado, cierra la otra instancia del backend y vuelve a iniciarlo.
+3. **Red neuronal de ocupación (opcional).** Requiere Python 3.12 o superior:
+   ```powershell
+   python -m venv .venv-occupancy
+   .\.venv-occupancy\Scripts\python.exe -m pip install -r ml/requirements.txt
+   ```
+   No ejecutes `scripts\setup-occupancy.ps1`: además de instalar, **reentrena el modelo**. Sin este entorno, la app usa las reglas de respaldo para estimar la ocupación.
 
-```bash
-cd backend
-./mvnw spring-boot:run
-```
-
-*(En Windows puedes usar `mvnw.cmd spring-boot:run`)*. El servidor se iniciará en `http://localhost:8080`.
+> Si la pestaña **Gráficos** muestra *"El servidor respondió en un formato inesperado"*, el backend que está corriendo no es la versión de la carpeta `backend/`.
 
 ### 2. Ejecutar la Aplicación Móvil en Flutter
 
@@ -155,7 +170,13 @@ La aplicación utiliza `EnvConfig` para resolver la conexión de forma automáti
 
 ## 🧪 Pruebas Automatizadas
 
-El proyecto incluye 34 pruebas completas en `test/widget_test.dart`:
+El proyecto incluye 99 pruebas en `test/`:
+- `widget_test.dart`: pantallas, modelos, carrito y diseño responsive.
+- `charts_test.dart`: las 7 gráficas con respuestas reales del backend (320 a 768 px y texto ampliado).
+- `weather_card_test.dart`: tarjeta de ocupación con la red neuronal.
+- `api_client_test.dart`: mensajes de error del cliente HTTP.
+
+Incluye, entre otras:
 - Formateo de moneda colombiana (COP).
 - Lógica de carrito: cálculo de subtotales, adición de tarifa fija de playa ($5.000 COP) y vaciado.
 - Modelos de datos: mapeo de roles de usuario, etiquetas de pedidos y deserialización de productos MongoDB.
@@ -166,7 +187,9 @@ Ejecutar pruebas:
 ```bash
 flutter test
 ```
-*Resultado: `All tests passed! (34/34)`*
+*Resultado: `All tests passed!` (99 pruebas)*
+
+Pruebas del backend: `cd backend` y `mvnw.cmd test`.
 
 ---
 

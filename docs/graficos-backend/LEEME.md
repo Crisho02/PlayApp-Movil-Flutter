@@ -1,8 +1,11 @@
 # Backend de la pestaña "Gráficos" (PlayApp-main)
 
-La pestaña **Gráficos** del panel admin consulta `GET /api/admin/charts`, que vive en el
-backend **PlayApp-main** (el que se ejecuta con `start-playapp.bat` en el puerto 8080).
-Ese proyecto no está en este repositorio, así que el cambio se entrega como parche.
+La pestaña **Gráficos** del panel admin consulta `GET /api/admin/charts`.
+
+> **La carpeta `backend/` de este repositorio ya incluye este endpoint.** Si ejecutas el backend
+> desde ahí (`backend\start-playapp.bat`), no necesitas este parche.
+
+El parche solo sirve si ejecutas otra copia de **PlayApp-main** fuera de este repositorio.
 
 ## Qué añade el parche (solo código nuevo; no modifica nada existente)
 

@@ -32,6 +32,9 @@ class AdminProvider extends ChangeNotifier {
   ChartsFilter _chartsFilter = const ChartsFilter();
   int _chartsRequestId = 0;
 
+  /// Tiempo máximo de espera de la pestaña "Gráficos".
+  static const Duration chartsTimeout = Duration(seconds: 30);
+
   SalesChartsData? get salesCharts => _salesCharts;
   bool get isChartsLoading => _isChartsLoading;
   String? get chartsError => _chartsError;
@@ -138,10 +141,17 @@ class AdminProvider extends ChangeNotifier {
     String? error;
     SalesChartsData? parsed;
     try {
-      final res = await ApiClient.get<Map<String, dynamic>>(
-        ApiEndpoints.adminCharts,
-        queryParameters: {'correo': correo, ...requested.toQuery()},
-      );
+      // Más margen que el resto de pantallas (consulta agregada en la base de datos) y un
+      // reintento automático solo si no hubo respuesta del servidor (statusCode 0).
+      Future<ApiResponse<Map<String, dynamic>>> request() => ApiClient.get<Map<String, dynamic>>(
+            ApiEndpoints.adminCharts,
+            queryParameters: {'correo': correo, ...requested.toQuery()},
+            timeout: chartsTimeout,
+          );
+      var res = await request();
+      if (!res.success && res.statusCode == 0 && requestId == _chartsRequestId) {
+        res = await request();
+      }
       if (res.success && res.data != null) {
         parsed = SalesChartsData.tryParse(res.data!);
         if (parsed == null) error = 'La respuesta del servidor llegó incompleta. Intenta nuevamente.';
