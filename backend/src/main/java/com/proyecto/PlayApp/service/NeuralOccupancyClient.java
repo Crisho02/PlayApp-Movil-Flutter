@@ -46,17 +46,6 @@ public class NeuralOccupancyClient {
             return Optional.of(new Prediction(pct, result.path("model_version").asText()));
         } catch (RuntimeException ex) { return Optional.empty(); }
     }
-    /** Escenarios sintéticos calculados por la red neuronal para las gráficas. Vacío si el servicio no responde o devuelve algo inválido. */
-    public Optional<JsonNode> analytics() {
-        try {
-            JsonNode result = client.get().uri("/analytics").retrieve().body(JsonNode.class);
-            if (result == null || !result.path("available").asBoolean(false)
-                    || !"SIMULATED_ONLY".equals(result.path("trainingData").asText())
-                    || !result.path("hourly").isObject() || !result.path("heatmap").isObject()
-                    || !result.path("sensitivity").path("bases").isArray()) return Optional.empty();
-            return Optional.of(result);
-        } catch (RuntimeException ex) { return Optional.empty(); }
-    }
     private static void put(Map<String,Object> body,String key,JsonNode node,String field,double multiplier) {
         body.put(key,node.path(field).isNumber() ? node.path(field).asDouble()*multiplier : null);
     }

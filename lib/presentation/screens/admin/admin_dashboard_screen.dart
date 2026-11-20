@@ -14,7 +14,7 @@ import '../../../data/models/review_model.dart';
 import '../../../providers/admin_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/product_provider.dart';
-import '../../widgets/occupancy_analytics/occupancy_analytics_section.dart';
+import '../../widgets/charts/charts_tab.dart';
 import '../../widgets/order_detail_modal.dart';
 import '../../widgets/status_badge.dart';
 
@@ -43,7 +43,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 8, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
@@ -123,6 +123,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             Tab(icon: Icon(Icons.restaurant_menu_rounded, size: 18), text: 'Catálogo'),
             Tab(icon: Icon(Icons.wb_sunny_rounded, size: 18), text: 'Clima & Afluencia'),
             Tab(icon: Icon(Icons.auto_graph_rounded, size: 18), text: 'Predicción IA'),
+            Tab(icon: Icon(Icons.insights_rounded, size: 18), text: 'Gráficos'),
             Tab(icon: Icon(Icons.people_alt_rounded, size: 18), text: 'Usuarios'),
             Tab(icon: Icon(Icons.rate_review_rounded, size: 18), text: 'Reseñas'),
           ],
@@ -150,6 +151,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 _buildCatalogTab(adminProv),
                 _buildWeatherTab(adminProv),
                 _buildPredictionTab(adminProv),
+                const ChartsTab(),
                 _buildUsersTab(adminProv),
                 _buildReviewsTab(adminProv),
               ],
@@ -1722,10 +1724,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-
-            // Análisis de la red neuronal (gráficas interactivas)
-            const OccupancyAnalyticsSection(),
             const SizedBox(height: 24),
 
             // Mapa de Monitoreo

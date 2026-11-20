@@ -7,7 +7,6 @@ from contextlib import asynccontextmanager
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from .common import ROOT, CONFIG, FEATURES, WeatherInput, features
-from .analytics import build_analytics
 
 
 @asynccontextmanager
@@ -34,14 +33,6 @@ app=FastAPI(title="PlayApp - ocupacion simulada",lifespan=lifespan)
 def health():
     if app.state.model is None:raise HTTPException(503,"Model unavailable; run offline training")
     return {"ready":True,"version":app.state.meta["version"],"training_data":"SIMULATED_ONLY"}
-
-
-@app.get("/analytics")
-def analytics():
-    """Curvas, mapa de calor y sensibilidad calculados con el modelo cargado (solo lectura)."""
-    if app.state.model is None:raise HTTPException(503,"Model unavailable")
-    try:return build_analytics(app.state.model,app.state.meta)
-    except ValueError as ex:raise HTTPException(503,str(ex)) from ex
 
 
 @app.post("/predict")

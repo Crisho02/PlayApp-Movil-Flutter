@@ -1,0 +1,983 @@
+diff --git a/src/main/java/com/proyecto/PlayApp/rest/ApiAdminController.java b/src/main/java/com/proyecto/PlayApp/rest/ApiAdminController.java
+index 51becb5..aa97db2 100644
+--- a/src/main/java/com/proyecto/PlayApp/rest/ApiAdminController.java
++++ b/src/main/java/com/proyecto/PlayApp/rest/ApiAdminController.java
+@@ -21,6 +21,8 @@ import org.springframework.http.ResponseEntity;
+ import org.springframework.web.bind.annotation.*;
+ import org.springframework.web.multipart.MultipartFile;
+ 
++import java.time.LocalDate;
++import java.time.format.DateTimeParseException;
+ import java.util.*;
+ 
+ @RestController
+@@ -39,6 +41,7 @@ public class ApiAdminController {
+     private final WekaPredictionService wekaPredictionService;
+     private final ResenaRepository resenaRepository;
+     private final UsuarioService usuarioService;
++    private final SalesChartsService salesChartsService;
+ 
+     @Value("${playapp.admin.email:adminplayapp01@gmail.com}")
+     private String adminGlobalCorreo;
+@@ -497,4 +500,33 @@ public class ApiAdminController {
+         resenaRepository.deleteById(id);
+         return ResponseEntity.ok(Map.of("success", true, "mensaje", "Reseña eliminada correctamente"));
+     }
++
++    /**
++     * Datos de la pestaña "Gráficos" de la app móvil, calculados en vivo desde MongoDB.
++     * rango: 7d | 30d | 90d | 365d | todo | personalizado (con desde y hasta en formato AAAA-MM-DD).
++     * granularidad: auto | day | week | month. categoria: 1 Comida, 2 Bebida, 3 Servicio (opcional).
++     */
++    @GetMapping("/charts")
++    public ResponseEntity<?> graficos(
++            @RequestParam(name = "correo") String correo,
++            @RequestParam(name = "rango", defaultValue = "30d") String rango,
++            @RequestParam(name = "desde", required = false) String desde,
++            @RequestParam(name = "hasta", required = false) String hasta,
++            @RequestParam(name = "categoria", required = false) Integer categoria,
++            @RequestParam(name = "granularidad", defaultValue = "auto") String granularidad
++    ) {
++        if (!validarAdmin(correo)) {
++            return ResponseEntity.status(HttpStatus.FORBIDDEN)
++                    .body(Map.of("error", "No tienes permisos de administrador"));
++        }
++        try {
++            LocalDate fechaDesde = desde == null || desde.isBlank() ? null : LocalDate.parse(desde.trim());
++            LocalDate fechaHasta = hasta == null || hasta.isBlank() ? null : LocalDate.parse(hasta.trim());
++            return ResponseEntity.ok(salesChartsService.build(correo.trim(), rango, fechaDesde, fechaHasta, categoria, granularidad));
++        } catch (DateTimeParseException e) {
++            return ResponseEntity.badRequest().body(Map.of("error", "Formato de fecha no válido. Usa AAAA-MM-DD."));
++        } catch (IllegalArgumentException e) {
++            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
++        }
++    }
+ }
+diff --git b/src/main/java/com/proyecto/PlayApp/service/SalesChartsCalculator.java b/src/main/java/com/proyecto/PlayApp/service/SalesChartsCalculator.java
+new file mode 100644
+index 0000000..6882f91
+--- /dev/null
++++ b/src/main/java/com/proyecto/PlayApp/service/SalesChartsCalculator.java
+@@ -0,0 +1,447 @@
++package com.proyecto.PlayApp.service;
++
++import java.time.DayOfWeek;
++import java.time.LocalDate;
++import java.time.LocalDateTime;
++import java.time.YearMonth;
++import java.time.temporal.ChronoUnit;
++import java.time.temporal.TemporalAdjusters;
++import java.util.*;
++
++/**
++ * Cálculos de la pestaña "Gráficos" de la app móvil. No accede a la base de datos: recibe las
++ * líneas de venta ya consultadas (ver {@link SalesChartsService}) para poder probarse por completo.
++ *
++ * Criterios (los mismos del reporte de "productos más vendidos"):
++ * - una línea de venta es un producto dentro del carrito de un pedido no cancelado;
++ * - ingreso de la línea = subtotal, o precio x cantidad si el subtotal no existe.
++ */
++public final class SalesChartsCalculator {
++
++    public static final int MAX_BUCKETS = 400;
++    public static final long MAX_DAYS = 3660;
++    private static final Map<Integer, String> CATEGORIAS = new LinkedHashMap<>();
++    static {
++        CATEGORIAS.put(1, "Comida");
++        CATEGORIAS.put(2, "Bebida");
++        CATEGORIAS.put(3, "Servicio");
++    }
++
++    private SalesChartsCalculator() {
++    }
++
++    public record SaleLine(String pedidoId, LocalDateTime timestamp, String productoId, String nombre,
++                           Integer categoria, double cantidad, double subtotal) {
++    }
++
++    public record ProductInfo(String id, String nombre, Integer categoria, Double precio, Double stock) {
++    }
++
++    public record Range(String rango, LocalDate desde, LocalDate hasta,
++                        LocalDate anteriorDesde, LocalDate anteriorHasta, String granularidad) {
++        public boolean hasPrevious() {
++            return anteriorDesde != null;
++        }
++    }
++
++    // ---------------------------------------------------------------- rango y agrupación temporal
++
++    public static Range resolveRange(String rango, LocalDate desde, LocalDate hasta, String granularidad,
++                                     LocalDate hoy, LocalDate primerPedido) {
++        String r = rango == null || rango.isBlank() ? "30d" : rango.trim().toLowerCase(Locale.ROOT);
++        LocalDate d;
++        LocalDate h;
++        switch (r) {
++            case "7d" -> { h = hoy; d = hoy.minusDays(6); }
++            case "30d" -> { h = hoy; d = hoy.minusDays(29); }
++            case "90d" -> { h = hoy; d = hoy.minusDays(89); }
++            case "365d" -> { h = hoy; d = hoy.minusDays(364); }
++            case "todo" -> { h = hoy; d = primerPedido != null && !primerPedido.isAfter(hoy) ? primerPedido : hoy; }
++            case "personalizado" -> {
++                if (desde == null || hasta == null) {
++                    throw new IllegalArgumentException("Indica las fechas desde y hasta.");
++                }
++                if (desde.isAfter(hasta)) {
++                    throw new IllegalArgumentException("La fecha inicial no puede ser posterior a la final.");
++                }
++                d = desde;
++                h = hasta;
++            }
++            default -> throw new IllegalArgumentException("Rango no válido: " + rango);
++        }
++        long dias = ChronoUnit.DAYS.between(d, h) + 1;
++        if (dias > MAX_DAYS) {
++            throw new IllegalArgumentException("El rango máximo es de 10 años.");
++        }
++        LocalDate anteriorDesde = null;
++        LocalDate anteriorHasta = null;
++        if (!"todo".equals(r)) {
++            anteriorHasta = d.minusDays(1);
++            anteriorDesde = d.minusDays(dias);
++        }
++        return new Range(r, d, h, anteriorDesde, anteriorHasta, granularity(granularidad, d, h));
++    }
++
++    static String granularity(String requested, LocalDate d, LocalDate h) {
++        long dias = ChronoUnit.DAYS.between(d, h) + 1;
++        String g = requested == null || requested.isBlank() ? "auto" : requested.trim().toLowerCase(Locale.ROOT);
++        g = switch (g) {
++            case "auto" -> dias <= 31 ? "day" : dias <= 180 ? "week" : "month";
++            case "day", "week", "month" -> g;
++            default -> throw new IllegalArgumentException("Granularidad no válida: " + requested);
++        };
++        if ("day".equals(g) && dias > MAX_BUCKETS) g = "week";
++        if ("week".equals(g) && dias / 7 + 2 > MAX_BUCKETS) g = "month";
++        return g;
++    }
++
++    static LocalDate bucketStart(LocalDate date, String g) {
++        return switch (g) {
++            case "week" -> date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
++            case "month" -> date.withDayOfMonth(1);
++            default -> date;
++        };
++    }
++
++    static List<LocalDate> buckets(LocalDate d, LocalDate h, String g) {
++        List<LocalDate> out = new ArrayList<>();
++        LocalDate cur = bucketStart(d, g);
++        while (!cur.isAfter(h)) {
++            out.add(cur);
++            cur = switch (g) {
++                case "week" -> cur.plusWeeks(1);
++                case "month" -> cur.plusMonths(1);
++                default -> cur.plusDays(1);
++            };
++        }
++        return out;
++    }
++
++    static String label(LocalDate bucket, String g) {
++        return "month".equals(g) ? YearMonth.from(bucket).toString() : bucket.toString();
++    }
++
++    // ---------------------------------------------------------------- cálculo principal
++
++    private record Totals(double ingresos, double unidades, int pedidos) {
++        double ticket() {
++            return pedidos == 0 ? 0 : ingresos / pedidos;
++        }
++    }
++
++    private static final class Series {
++        final double[] ingresos;
++        final double[] unidades;
++        final List<Set<String>> pedidos;
++
++        Series(int n) {
++            ingresos = new double[n];
++            unidades = new double[n];
++            pedidos = new ArrayList<>(n);
++            for (int i = 0; i < n; i++) pedidos.add(new HashSet<>());
++        }
++    }
++
++    private static final class ProductAgg {
++        final String id;
++        final String nombre;
++        final Integer categoria;
++        final Double precio;
++        final Double stock;
++        final boolean activo;
++        double unidades;
++        double ingresos;
++        final Set<String> pedidos = new HashSet<>();
++        final double[] serieUnidades;
++        final double[] serieIngresos;
++
++        ProductAgg(String id, String nombre, Integer categoria, Double precio, Double stock, boolean activo, int n) {
++            this.id = id;
++            this.nombre = nombre;
++            this.categoria = categoria;
++            this.precio = precio;
++            this.stock = stock;
++            this.activo = activo;
++            serieUnidades = new double[n];
++            serieIngresos = new double[n];
++        }
++    }
++
++    public static Map<String, Object> compute(Range range, Integer categoria, List<SaleLine> lines, List<ProductInfo> catalog) {
++        if (categoria != null && !CATEGORIAS.containsKey(categoria)) {
++            throw new IllegalArgumentException("Categoría no válida.");
++        }
++        String g = range.granularidad();
++        List<LocalDate> buckets = buckets(range.desde(), range.hasta(), g);
++        Map<LocalDate, Integer> index = new HashMap<>();
++        for (int i = 0; i < buckets.size(); i++) index.put(buckets.get(i), i);
++
++        List<SaleLine> enRango = new ArrayList<>();
++        List<SaleLine> anteriores = new ArrayList<>();
++        for (SaleLine l : lines) {
++            if (l == null || l.timestamp() == null) continue;
++            LocalDate fecha = l.timestamp().toLocalDate();
++            if (within(fecha, range.desde(), range.hasta())) {
++                enRango.add(l);
++            } else if (range.hasPrevious() && within(fecha, range.anteriorDesde(), range.anteriorHasta())) {
++                anteriores.add(l);
++            }
++        }
++        List<SaleLine> actual = filterCategory(enRango, categoria);
++        List<SaleLine> anterior = filterCategory(anteriores, categoria);
++
++        Totals tActual = totals(actual);
++        Totals tAnterior = totals(anterior);
++        boolean prev = range.hasPrevious();
++
++        // Tendencia actual y periodo anterior alineado por posición
++        Series serie = series(actual, buckets.size(), l -> index.get(bucketStart(l.timestamp().toLocalDate(), g)));
++        List<Double> ingresosAnterior = null;
++        List<Double> pedidosAnterior = null;
++        List<Double> unidadesAnterior = null;
++        if (prev) {
++            List<LocalDate> prevBuckets = buckets(range.anteriorDesde(), range.anteriorHasta(), g);
++            Map<LocalDate, Integer> prevIndex = new HashMap<>();
++            for (int i = 0; i < prevBuckets.size(); i++) prevIndex.put(prevBuckets.get(i), i);
++            Series sp = series(anterior, prevBuckets.size(), l -> prevIndex.get(bucketStart(l.timestamp().toLocalDate(), g)));
++            ingresosAnterior = aligned(sp.ingresos, buckets.size());
++            unidadesAnterior = aligned(sp.unidades, buckets.size());
++            double[] cuentas = new double[prevBuckets.size()];
++            for (int i = 0; i < cuentas.length; i++) cuentas[i] = sp.pedidos.get(i).size();
++            pedidosAnterior = aligned(cuentas, buckets.size());
++        }
++
++        Map<String, Object> out = new LinkedHashMap<>();
++
++        Map<String, Object> filters = new LinkedHashMap<>();
++        filters.put("rango", range.rango());
++        filters.put("desde", range.desde().toString());
++        filters.put("hasta", range.hasta().toString());
++        filters.put("categoria", categoria);
++        filters.put("granularidad", g);
++        filters.put("anteriorDesde", prev ? range.anteriorDesde().toString() : null);
++        filters.put("anteriorHasta", prev ? range.anteriorHasta().toString() : null);
++        out.put("filters", filters);
++
++        List<Map<String, Object>> categories = new ArrayList<>();
++        CATEGORIAS.forEach((id, nombre) -> categories.add(Map.of("id", id, "nombre", nombre)));
++        out.put("categories", categories);
++
++        Map<String, Object> kpis = new LinkedHashMap<>();
++        kpis.put("ingresos", kpi(tActual.ingresos(), tAnterior.ingresos(), prev));
++        kpis.put("pedidos", kpi(tActual.pedidos(), tAnterior.pedidos(), prev));
++        kpis.put("ticketPromedio", kpi(tActual.ticket(), tAnterior.ticket(), prev));
++        kpis.put("unidades", kpi(tActual.unidades(), tAnterior.unidades(), prev));
++        out.put("kpis", kpis);
++
++        Map<String, Object> trend = new LinkedHashMap<>();
++        List<String> labels = new ArrayList<>();
++        for (LocalDate b : buckets) labels.add(label(b, g));
++        trend.put("labels", labels);
++        trend.put("ingresos", rounded(serie.ingresos));
++        trend.put("unidades", rounded(serie.unidades));
++        List<Double> pedidosSerie = new ArrayList<>();
++        for (Set<String> s : serie.pedidos) pedidosSerie.add((double) s.size());
++        trend.put("pedidos", pedidosSerie);
++        trend.put("ingresosAnterior", ingresosAnterior);
++        trend.put("pedidosAnterior", pedidosAnterior);
++        trend.put("unidadesAnterior", unidadesAnterior);
++        out.put("trend", trend);
++
++        out.put("products", products(actual, catalog, categoria, buckets.size(), tActual.pedidos(),
++                l -> index.get(bucketStart(l.timestamp().toLocalDate(), g))));
++        out.put("heatmap", heatmap(actual));
++        out.put("categoryMix", categoryMix(enRango));
++
++        Map<String, Object> resumen = new LinkedHashMap<>();
++        resumen.put("pedidos", tActual.pedidos());
++        resumen.put("lineas", actual.size());
++        out.put("resumen", resumen);
++        return out;
++    }
++
++    // ---------------------------------------------------------------- auxiliares
++
++    private static boolean within(LocalDate f, LocalDate d, LocalDate h) {
++        return !f.isBefore(d) && !f.isAfter(h);
++    }
++
++    private static List<SaleLine> filterCategory(List<SaleLine> ls, Integer categoria) {
++        if (categoria == null) return ls;
++        List<SaleLine> out = new ArrayList<>();
++        for (SaleLine l : ls) if (categoria.equals(l.categoria())) out.add(l);
++        return out;
++    }
++
++    private static Totals totals(List<SaleLine> ls) {
++        double ingresos = 0;
++        double unidades = 0;
++        Set<String> pedidos = new HashSet<>();
++        for (SaleLine l : ls) {
++            ingresos += l.subtotal();
++            unidades += l.cantidad();
++            pedidos.add(l.pedidoId());
++        }
++        return new Totals(ingresos, unidades, pedidos.size());
++    }
++
++    private interface BucketOf {
++        Integer of(SaleLine l);
++    }
++
++    private static Series series(List<SaleLine> ls, int n, BucketOf bucketOf) {
++        Series s = new Series(n);
++        for (SaleLine l : ls) {
++            Integer i = bucketOf.of(l);
++            if (i == null) continue;
++            s.ingresos[i] += l.subtotal();
++            s.unidades[i] += l.cantidad();
++            s.pedidos.get(i).add(l.pedidoId());
++        }
++        return s;
++    }
++
++    private static List<Double> aligned(double[] values, int n) {
++        List<Double> out = new ArrayList<>(n);
++        for (int i = 0; i < n; i++) out.add(i < values.length ? round2(values[i]) : null);
++        return out;
++    }
++
++    private static Map<String, Object> kpi(double actual, double anterior, boolean prev) {
++        Map<String, Object> m = new LinkedHashMap<>();
++        m.put("actual", round2(actual));
++        m.put("anterior", prev ? round2(anterior) : null);
++        m.put("cambioPct", prev && anterior > 0 ? round1((actual - anterior) / anterior * 100) : null);
++        return m;
++    }
++
++    private static List<Map<String, Object>> products(List<SaleLine> actual, List<ProductInfo> catalog, Integer categoria,
++                                                      int n, int totalPedidos, BucketOf bucketOf) {
++        Map<String, ProductAgg> byKey = new LinkedHashMap<>();
++        Map<String, String> idByName = new HashMap<>();
++        for (ProductInfo p : catalog) {
++            if (p == null || p.id() == null) continue;
++            if (categoria != null && !categoria.equals(p.categoria())) continue;
++            byKey.put(p.id(), new ProductAgg(p.id(), p.nombre() == null ? "Sin nombre" : p.nombre(), p.categoria(),
++                    p.precio(), p.stock(), true, n));
++            if (p.nombre() != null) idByName.putIfAbsent(normalize(p.nombre()), p.id());
++        }
++        for (SaleLine l : actual) {
++            String key;
++            if (l.productoId() != null && byKey.containsKey(l.productoId())) {
++                key = l.productoId();
++            } else if (l.nombre() != null && idByName.containsKey(normalize(l.nombre()))) {
++                key = idByName.get(normalize(l.nombre()));
++            } else {
++                key = "retirado:" + (l.productoId() != null ? l.productoId() : normalize(l.nombre()));
++                if (!byKey.containsKey(key)) {
++                    byKey.put(key, new ProductAgg(key, l.nombre() == null ? "Sin producto" : l.nombre(),
++                            l.categoria(), null, null, false, n));
++                }
++            }
++            ProductAgg a = byKey.get(key);
++            a.unidades += l.cantidad();
++            a.ingresos += l.subtotal();
++            a.pedidos.add(l.pedidoId());
++            Integer i = bucketOf.of(l);
++            if (i != null) {
++                a.serieUnidades[i] += l.cantidad();
++                a.serieIngresos[i] += l.subtotal();
++            }
++        }
++        List<ProductAgg> list = new ArrayList<>(byKey.values());
++        list.sort(Comparator.comparingDouble((ProductAgg a) -> a.ingresos).reversed()
++                .thenComparing(Comparator.comparingDouble((ProductAgg a) -> a.unidades).reversed())
++                .thenComparing(a -> a.nombre, String.CASE_INSENSITIVE_ORDER));
++        List<Map<String, Object>> out = new ArrayList<>();
++        for (ProductAgg a : list) {
++            Map<String, Object> m = new LinkedHashMap<>();
++            m.put("id", a.id);
++            m.put("nombre", a.nombre);
++            m.put("categoria", a.categoria);
++            m.put("categoriaNombre", CATEGORIAS.getOrDefault(a.categoria, "Otros"));
++            m.put("precio", a.precio);
++            m.put("stock", a.stock);
++            m.put("activo", a.activo);
++            m.put("unidades", round2(a.unidades));
++            m.put("ingresos", round2(a.ingresos));
++            m.put("pedidos", a.pedidos.size());
++            m.put("ticketPromedio", a.pedidos.isEmpty() ? 0.0 : round2(a.ingresos / a.pedidos.size()));
++            m.put("frecuenciaPct", totalPedidos == 0 ? 0.0 : round1(a.pedidos.size() * 100.0 / totalPedidos));
++            m.put("serieUnidades", rounded(a.serieUnidades));
++            m.put("serieIngresos", rounded(a.serieIngresos));
++            out.add(m);
++        }
++        return out;
++    }
++
++    /** Matriz 7 x 24 (lunes = 0). Cada pedido se cuenta una sola vez, en el día y hora de su fecha. */
++    private static Map<String, Object> heatmap(List<SaleLine> actual) {
++        double[][] pedidos = new double[7][24];
++        double[][] ingresos = new double[7][24];
++        Set<String> contados = new HashSet<>();
++        for (SaleLine l : actual) {
++            int dia = l.timestamp().getDayOfWeek().getValue() - 1;
++            int hora = l.timestamp().getHour();
++            ingresos[dia][hora] += l.subtotal();
++            if (contados.add(l.pedidoId())) pedidos[dia][hora] += 1;
++        }
++        Map<String, Object> m = new LinkedHashMap<>();
++        m.put("pedidos", matrix(pedidos));
++        m.put("ingresos", matrix(ingresos));
++        return m;
++    }
++
++    /** Participación por categoría. Ignora el filtro de categoría para poder comparar entre ellas. */
++    private static List<Map<String, Object>> categoryMix(List<SaleLine> enRango) {
++        Map<Integer, double[]> acc = new LinkedHashMap<>();
++        Map<Integer, Set<String>> pedidos = new LinkedHashMap<>();
++        for (Integer id : CATEGORIAS.keySet()) {
++            acc.put(id, new double[2]);
++            pedidos.put(id, new HashSet<>());
++        }
++        for (SaleLine l : enRango) {
++            int id = l.categoria() != null && CATEGORIAS.containsKey(l.categoria()) ? l.categoria() : 0;
++            acc.computeIfAbsent(id, k -> new double[2]);
++            pedidos.computeIfAbsent(id, k -> new HashSet<>());
++            acc.get(id)[0] += l.subtotal();
++            acc.get(id)[1] += l.cantidad();
++            pedidos.get(id).add(l.pedidoId());
++        }
++        List<Map<String, Object>> out = new ArrayList<>();
++        acc.forEach((id, v) -> {
++            Map<String, Object> m = new LinkedHashMap<>();
++            m.put("id", id);
++            m.put("nombre", CATEGORIAS.getOrDefault(id, "Otros"));
++            m.put("ingresos", round2(v[0]));
++            m.put("unidades", round2(v[1]));
++            m.put("pedidos", pedidos.get(id).size());
++            out.add(m);
++        });
++        return out;
++    }
++
++    private static List<List<Double>> matrix(double[][] values) {
++        List<List<Double>> out = new ArrayList<>();
++        for (double[] row : values) out.add(rounded(row));
++        return out;
++    }
++
++    private static List<Double> rounded(double[] values) {
++        List<Double> out = new ArrayList<>(values.length);
++        for (double v : values) out.add(round2(v));
++        return out;
++    }
++
++    private static String normalize(String s) {
++        return s == null ? "" : s.trim().toLowerCase(Locale.ROOT);
++    }
++
++    static double round2(double v) {
++        return Math.round(v * 100.0) / 100.0;
++    }
++
++    static double round1(double v) {
++        return Math.round(v * 10.0) / 10.0;
++    }
++}
+diff --git b/src/main/java/com/proyecto/PlayApp/service/SalesChartsService.java b/src/main/java/com/proyecto/PlayApp/service/SalesChartsService.java
+new file mode 100644
+index 0000000..a0c30a9
+--- /dev/null
++++ b/src/main/java/com/proyecto/PlayApp/service/SalesChartsService.java
+@@ -0,0 +1,166 @@
++package com.proyecto.PlayApp.service;
++
++import com.proyecto.PlayApp.entity.Usuario;
++import com.proyecto.PlayApp.repository.UsuarioRepository;
++import com.proyecto.PlayApp.service.SalesChartsCalculator.ProductInfo;
++import com.proyecto.PlayApp.service.SalesChartsCalculator.SaleLine;
++import org.bson.Document;
++import org.springframework.beans.factory.annotation.Value;
++import org.springframework.data.mongodb.core.MongoTemplate;
++import org.springframework.stereotype.Service;
++
++import java.time.LocalDate;
++import java.time.LocalDateTime;
++import java.time.ZoneId;
++import java.util.*;
++
++/**
++ * Datos de la pestaña "Gráficos": consulta MongoDB en cada petición (siempre datos actuales).
++ * Solo se proyectan los campos necesarios; nunca se leen las imágenes de los productos.
++ * Igual que el reporte existente: el administrador global ve todo y un administrador de
++ * restaurante solo ve las ventas de sus propios productos.
++ */
++@Service
++public class SalesChartsService {
++    private static final String PEDIDOS = "pedidos";
++    private static final String PRODUCTOS = "productos";
++
++    private final MongoTemplate mongoTemplate;
++    private final UsuarioRepository usuarioRepository;
++    private final String adminGlobalCorreo;
++
++    public SalesChartsService(MongoTemplate mongoTemplate, UsuarioRepository usuarioRepository,
++                              @Value("${playapp.admin.email:adminplayapp01@gmail.com}") String adminGlobalCorreo) {
++        this.mongoTemplate = mongoTemplate;
++        this.usuarioRepository = usuarioRepository;
++        this.adminGlobalCorreo = adminGlobalCorreo;
++    }
++
++    public Map<String, Object> build(String correoAdmin, String rango, LocalDate desde, LocalDate hasta,
++                                     Integer categoria, String granularidad) {
++        String restauranteId = restauranteIdSiAplica(correoAdmin);
++        LocalDate hoy = LocalDate.now();
++        boolean todo = rango != null && "todo".equalsIgnoreCase(rango.trim());
++        LocalDate primerPedido = todo ? primerPedido(restauranteId) : null;
++        SalesChartsCalculator.Range range = SalesChartsCalculator.resolveRange(rango, desde, hasta, granularidad, hoy, primerPedido);
++
++        LocalDate inicio = range.hasPrevious() ? range.anteriorDesde() : range.desde();
++        List<SaleLine> lineas = cargarLineas(inicio.atStartOfDay(), range.hasta().plusDays(1).atStartOfDay(), restauranteId);
++        List<ProductInfo> catalogo = cargarProductos(restauranteId);
++
++        Map<String, Object> out = new LinkedHashMap<>();
++        out.put("generatedAt", LocalDateTime.now().withNano(0).toString());
++        out.putAll(SalesChartsCalculator.compute(range, categoria, lineas, catalogo));
++        return out;
++    }
++
++    // ---------------------------------------------------------------- consultas
++
++    List<SaleLine> cargarLineas(LocalDateTime desde, LocalDateTime hastaExclusivo, String restauranteId) {
++        List<Document> pipeline = new ArrayList<>();
++        pipeline.add(new Document("$match", new Document("timestamp",
++                new Document("$gte", toDate(desde)).append("$lt", toDate(hastaExclusivo)))
++                .append("estado", new Document("$nin", List.of(3, -1)))
++                .append("carrito", new Document("$exists", true).append("$ne", List.of()))));
++        pipeline.add(new Document("$unwind", new Document("path", "$carrito").append("preserveNullAndEmptyArrays", false)));
++        if (restauranteId != null) {
++            pipeline.add(new Document("$match", new Document("$or", List.of(
++                    new Document("carrito.producto.entidad._id", restauranteId),
++                    new Document("carrito.producto.entidad.id", restauranteId)))));
++        }
++        pipeline.add(new Document("$project", new Document("_id", 0)
++                .append("pedidoId", "$_id")
++                .append("timestamp", 1)
++                .append("productoId", ifNull("$carrito.producto._id", ifNull("$carrito.producto.id", "$carrito.producto.nombre")))
++                .append("nombre", ifNull("$carrito.producto.nombre", "Sin producto"))
++                .append("categoria", "$carrito.producto.categoria")
++                .append("cantidad", ifNull("$carrito.cantidad", 1))
++                .append("subtotal", new Document("$cond", List.of(
++                        new Document("$gt", List.of(ifNull("$carrito.subtotal", 0), 0)),
++                        "$carrito.subtotal",
++                        new Document("$multiply", List.of(ifNull("$carrito.producto.precio", 0), ifNull("$carrito.cantidad", 1)))
++                )))));
++
++        List<SaleLine> out = new ArrayList<>();
++        for (Document d : mongoTemplate.getCollection(PEDIDOS).aggregate(pipeline)) {
++            LocalDateTime ts = toLocalDateTime(d.get("timestamp"));
++            if (ts == null) continue;
++            out.add(new SaleLine(
++                    String.valueOf(d.get("pedidoId")),
++                    ts,
++                    d.get("productoId") == null ? null : String.valueOf(d.get("productoId")),
++                    d.get("nombre") == null ? null : String.valueOf(d.get("nombre")),
++                    toInteger(d.get("categoria")),
++                    toDouble(d.get("cantidad"), 1),
++                    toDouble(d.get("subtotal"), 0)));
++        }
++        return out;
++    }
++
++    List<ProductInfo> cargarProductos(String restauranteId) {
++        Document filtro = restauranteId == null ? new Document() : new Document("$or", List.of(
++                new Document("entidad._id", restauranteId),
++                new Document("entidad.id", restauranteId)));
++        Document proyeccion = new Document("nombre", 1).append("categoria", 1).append("precio", 1).append("stock", 1);
++        List<ProductInfo> out = new ArrayList<>();
++        for (Document d : mongoTemplate.getCollection(PRODUCTOS).find(filtro).projection(proyeccion)) {
++            out.add(new ProductInfo(
++                    String.valueOf(d.get("_id")),
++                    d.get("nombre") == null ? null : String.valueOf(d.get("nombre")),
++                    toInteger(d.get("categoria")),
++                    d.get("precio") instanceof Number n ? n.doubleValue() : null,
++                    d.get("stock") instanceof Number n ? n.doubleValue() : null));
++        }
++        return out;
++    }
++
++    LocalDate primerPedido(String restauranteId) {
++        List<Document> pipeline = new ArrayList<>();
++        pipeline.add(new Document("$match", new Document("timestamp", new Document("$ne", null))
++                .append("estado", new Document("$nin", List.of(3, -1)))));
++        if (restauranteId != null) {
++            pipeline.add(new Document("$unwind", "$carrito"));
++            pipeline.add(new Document("$match", new Document("$or", List.of(
++                    new Document("carrito.producto.entidad._id", restauranteId),
++                    new Document("carrito.producto.entidad.id", restauranteId)))));
++        }
++        pipeline.add(new Document("$sort", new Document("timestamp", 1)));
++        pipeline.add(new Document("$limit", 1));
++        pipeline.add(new Document("$project", new Document("_id", 0).append("timestamp", 1)));
++        Document first = mongoTemplate.getCollection(PEDIDOS).aggregate(pipeline).first();
++        LocalDateTime ts = first == null ? null : toLocalDateTime(first.get("timestamp"));
++        return ts == null ? null : ts.toLocalDate();
++    }
++
++    private String restauranteIdSiAplica(String correoAdmin) {
++        if (correoAdmin == null || adminGlobalCorreo.equalsIgnoreCase(correoAdmin.trim())) {
++            return null;
++        }
++        Usuario usuario = usuarioRepository.findUsuarioByCorreo(correoAdmin.trim());
++        return usuario == null ? null : usuario.getId();
++    }
++
++    // ---------------------------------------------------------------- conversiones
++
++    // Spring Data guarda LocalDateTime como Date usando la zona del sistema; se lee igual.
++    private static Date toDate(LocalDateTime t) {
++        return Date.from(t.atZone(ZoneId.systemDefault()).toInstant());
++    }
++
++    private static LocalDateTime toLocalDateTime(Object v) {
++        if (v instanceof Date d) return LocalDateTime.ofInstant(d.toInstant(), ZoneId.systemDefault());
++        return null;
++    }
++
++    private static Integer toInteger(Object v) {
++        return v instanceof Number n ? n.intValue() : null;
++    }
++
++    private static double toDouble(Object v, double fallback) {
++        return v instanceof Number n && Double.isFinite(n.doubleValue()) ? n.doubleValue() : fallback;
++    }
++
++    private static Document ifNull(Object value, Object fallback) {
++        return new Document("$ifNull", List.of(value, fallback));
++    }
++}
+diff --git b/src/test/java/com/proyecto/PlayApp/rest/ApiAdminChartsEndpointTest.java b/src/test/java/com/proyecto/PlayApp/rest/ApiAdminChartsEndpointTest.java
+new file mode 100644
+index 0000000..3604fcb
+--- /dev/null
++++ b/src/test/java/com/proyecto/PlayApp/rest/ApiAdminChartsEndpointTest.java
+@@ -0,0 +1,79 @@
++package com.proyecto.PlayApp.rest;
++
++import com.proyecto.PlayApp.entity.Usuario;
++import com.proyecto.PlayApp.repository.PedidoRepository;
++import com.proyecto.PlayApp.repository.ProductoRepository;
++import com.proyecto.PlayApp.repository.ResenaRepository;
++import com.proyecto.PlayApp.repository.UsuarioRepository;
++import com.proyecto.PlayApp.service.*;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++import org.springframework.test.util.ReflectionTestUtils;
++import org.springframework.test.web.servlet.MockMvc;
++import org.springframework.test.web.servlet.setup.MockMvcBuilders;
++
++import java.time.LocalDate;
++import java.util.Map;
++
++import static org.mockito.ArgumentMatchers.*;
++import static org.mockito.Mockito.*;
++import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
++import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
++import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
++
++/** Permisos, parámetros y errores de GET /api/admin/charts (sin base de datos ni red). */
++class ApiAdminChartsEndpointTest {
++    private final UsuarioRepository usuarios = mock(UsuarioRepository.class);
++    private final SalesChartsService charts = mock(SalesChartsService.class);
++    private MockMvc mvc;
++
++    @BeforeEach
++    void setUp() {
++        var controller = new ApiAdminController(mock(PedidoService.class), mock(PedidoRepository.class),
++                mock(ProductoService.class), mock(ProductoRepository.class), usuarios, mock(ReporteService.class),
++                mock(CurrentWeatherService.class), mock(WekaPredictionService.class), mock(ResenaRepository.class),
++                mock(UsuarioService.class), charts);
++        ReflectionTestUtils.setField(controller, "adminGlobalCorreo", "admin@playapp.test");
++        mvc = MockMvcBuilders.standaloneSetup(controller).build();
++        when(usuarios.findUsuarioByCorreo("admin@playapp.test"))
++                .thenReturn(Usuario.builder().correo("admin@playapp.test").rol("ROLE_ADMIN").build());
++    }
++
++    @Test
++    void noAdminRecibe403YNoSeConsultaLaBaseDeDatos() throws Exception {
++        when(usuarios.findUsuarioByCorreo("cliente@x.com")).thenReturn(Usuario.builder().correo("cliente@x.com").rol("ROLE_USER").build());
++        mvc.perform(get("/api/admin/charts").param("correo", "cliente@x.com")).andExpect(status().isForbidden());
++        verifyNoInteractions(charts);
++    }
++
++    @Test
++    void adminRecibeLosDatosYLosParametrosLleganAlServicio() throws Exception {
++        when(charts.build(any(), any(), any(), any(), any(), any())).thenReturn(Map.of("resumen", Map.of("pedidos", 7)));
++        mvc.perform(get("/api/admin/charts").param("correo", "admin@playapp.test").param("rango", "personalizado")
++                        .param("desde", "2026-05-01").param("hasta", "2026-05-31").param("categoria", "2").param("granularidad", "week"))
++                .andExpect(status().isOk())
++                .andExpect(jsonPath("$.resumen.pedidos").value(7));
++        verify(charts).build("admin@playapp.test", "personalizado", LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31), 2, "week");
++    }
++
++    @Test
++    void valoresPorDefectoSonUltimos30DiasYGranularidadAutomatica() throws Exception {
++        when(charts.build(any(), any(), any(), any(), any(), any())).thenReturn(Map.of());
++        mvc.perform(get("/api/admin/charts").param("correo", "admin@playapp.test")).andExpect(status().isOk());
++        verify(charts).build("admin@playapp.test", "30d", null, null, null, "auto");
++    }
++
++    @Test
++    void fechaMalFormadaOParametrosInvalidosDevuelven400ConMensaje() throws Exception {
++        mvc.perform(get("/api/admin/charts").param("correo", "admin@playapp.test").param("rango", "personalizado")
++                        .param("desde", "01/05/2026").param("hasta", "2026-05-31"))
++                .andExpect(status().isBadRequest())
++                .andExpect(jsonPath("$.error").exists());
++        when(charts.build(any(), eq("ayer"), any(), any(), any(), any())).thenThrow(new IllegalArgumentException("Rango no válido: ayer"));
++        mvc.perform(get("/api/admin/charts").param("correo", "admin@playapp.test").param("rango", "ayer"))
++                .andExpect(status().isBadRequest())
++                .andExpect(jsonPath("$.error").value("Rango no válido: ayer"));
++        mvc.perform(get("/api/admin/charts").param("correo", "admin@playapp.test").param("categoria", "abc"))
++                .andExpect(status().isBadRequest());
++    }
++}
+diff --git b/src/test/java/com/proyecto/PlayApp/service/SalesChartsCalculatorTest.java b/src/test/java/com/proyecto/PlayApp/service/SalesChartsCalculatorTest.java
+new file mode 100644
+index 0000000..e5d8222
+--- /dev/null
++++ b/src/test/java/com/proyecto/PlayApp/service/SalesChartsCalculatorTest.java
+@@ -0,0 +1,212 @@
++package com.proyecto.PlayApp.service;
++
++import com.proyecto.PlayApp.service.SalesChartsCalculator.ProductInfo;
++import com.proyecto.PlayApp.service.SalesChartsCalculator.Range;
++import com.proyecto.PlayApp.service.SalesChartsCalculator.SaleLine;
++import org.junit.jupiter.api.Test;
++
++import java.time.LocalDate;
++import java.time.LocalDateTime;
++import java.util.List;
++import java.util.Map;
++
++import static org.assertj.core.api.Assertions.assertThat;
++import static org.assertj.core.api.Assertions.assertThatThrownBy;
++
++@SuppressWarnings("unchecked")
++class SalesChartsCalculatorTest {
++    private static final LocalDate HOY = LocalDate.of(2026, 11, 19); // jueves
++
++    private static SaleLine line(String pedido, String fechaHora, String productoId, String nombre, int cat, double cant, double subtotal) {
++        return new SaleLine(pedido, LocalDateTime.parse(fechaHora), productoId, nombre, cat, cant, subtotal);
++    }
++
++    private static final List<ProductInfo> CATALOGO = List.of(
++            new ProductInfo("p1", "Pescado frito", 1, 32000.0, 24.0),
++            new ProductInfo("p2", "Limonada de coco", 2, 10000.0, 50.0),
++            new ProductInfo("p3", "Gusanito", 3, 45000.0, 5.0),
++            new ProductInfo("p4", "Coca-Cola", 2, 3500.0, 62.0)); // nunca vendido
++
++    // Periodo actual (7d): 13-19 nov. Periodo anterior: 6-12 nov.
++    private static final List<SaleLine> LINEAS = List.of(
++            line("A", "2026-11-18T12:30:00", "p1", "Pescado frito", 1, 2, 64000),
++            line("A", "2026-11-18T12:30:00", "p2", "Limonada de coco", 2, 2, 20000),
++            line("B", "2026-11-19T15:10:00", "p2", "Limonada de coco", 2, 1, 10000),
++            line("C", "2026-11-14T10:05:00", "p3", "Gusanito", 3, 1, 45000),
++            line("D", "2026-11-15T12:45:00", "x9", "Mojarra (retirada)", 1, 1, 35000),
++            line("E", "2026-11-16T12:00:00", null, "pescado frito ", 1, 1, 32000),   // sin id: se asocia por nombre
++            line("F", "2026-11-10T13:00:00", "p1", "Pescado frito", 1, 1, 32000),   // periodo anterior
++            line("G", "2026-11-11T18:00:00", "p2", "Limonada de coco", 2, 3, 30000), // periodo anterior
++            line("H", "2026-10-01T09:00:00", "p1", "Pescado frito", 1, 5, 160000)); // fuera de ambos
++
++    private static Map<String, Object> run(String rango, Integer categoria) {
++        Range r = SalesChartsCalculator.resolveRange(rango, null, null, "auto", HOY, LocalDate.of(2026, 10, 1));
++        return SalesChartsCalculator.compute(r, categoria, LINEAS, CATALOGO);
++    }
++
++    private static Map<String, Object> kpi(Map<String, Object> out, String name) {
++        return (Map<String, Object>) ((Map<String, Object>) out.get("kpis")).get(name);
++    }
++
++    // ------------------------------------------------------------ rangos
++
++    @Test
++    void presetsDefineElPeriodoYElPeriodoAnteriorDeIgualDuracion() {
++        Range r7 = SalesChartsCalculator.resolveRange("7d", null, null, "auto", HOY, null);
++        assertThat(r7.desde()).isEqualTo(LocalDate.of(2026, 11, 13));
++        assertThat(r7.hasta()).isEqualTo(HOY);
++        assertThat(r7.anteriorDesde()).isEqualTo(LocalDate.of(2026, 11, 6));
++        assertThat(r7.anteriorHasta()).isEqualTo(LocalDate.of(2026, 11, 12));
++        assertThat(r7.granularidad()).isEqualTo("day");
++        assertThat(SalesChartsCalculator.resolveRange("30d", null, null, null, HOY, null).desde()).isEqualTo(LocalDate.of(2026, 10, 21));
++        assertThat(SalesChartsCalculator.resolveRange("90d", null, null, "auto", HOY, null).granularidad()).isEqualTo("week");
++        assertThat(SalesChartsCalculator.resolveRange("365d", null, null, "auto", HOY, null).granularidad()).isEqualTo("month");
++        assertThat(SalesChartsCalculator.resolveRange(null, null, null, null, HOY, null).rango()).isEqualTo("30d");
++    }
++
++    @Test
++    void todoEmpiezaEnElPrimerPedidoYNoTienePeriodoAnterior() {
++        Range r = SalesChartsCalculator.resolveRange("todo", null, null, "auto", HOY, LocalDate.of(2020, 2, 3));
++        assertThat(r.desde()).isEqualTo(LocalDate.of(2020, 2, 3));
++        assertThat(r.hasPrevious()).isFalse();
++        assertThat(r.granularidad()).isEqualTo("month");
++        assertThat(SalesChartsCalculator.resolveRange("todo", null, null, "auto", HOY, null).desde()).isEqualTo(HOY);
++    }
++
++    @Test
++    void personalizadoValidaLasFechas() {
++        Range r = SalesChartsCalculator.resolveRange("personalizado", LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31), "week", HOY, null);
++        assertThat(r.granularidad()).isEqualTo("week");
++        assertThat(r.anteriorHasta()).isEqualTo(LocalDate.of(2026, 4, 30));
++        assertThatThrownBy(() -> SalesChartsCalculator.resolveRange("personalizado", null, HOY, "auto", HOY, null))
++                .isInstanceOf(IllegalArgumentException.class);
++        assertThatThrownBy(() -> SalesChartsCalculator.resolveRange("personalizado", HOY, HOY.minusDays(1), "auto", HOY, null))
++                .isInstanceOf(IllegalArgumentException.class);
++        assertThatThrownBy(() -> SalesChartsCalculator.resolveRange("personalizado", HOY.minusYears(11), HOY, "auto", HOY, null))
++                .isInstanceOf(IllegalArgumentException.class);
++        assertThatThrownBy(() -> SalesChartsCalculator.resolveRange("ayer", null, null, "auto", HOY, null))
++                .isInstanceOf(IllegalArgumentException.class);
++        assertThatThrownBy(() -> SalesChartsCalculator.resolveRange("7d", null, null, "hora", HOY, null))
++                .isInstanceOf(IllegalArgumentException.class);
++    }
++
++    @Test
++    void granularidadDemasiadoFinaSeAjustaParaNoSuperarElMaximoDePuntos() {
++        Range r = SalesChartsCalculator.resolveRange("personalizado", HOY.minusYears(5), HOY, "day", HOY, null);
++        assertThat(r.granularidad()).isEqualTo("week");
++        Range r2 = SalesChartsCalculator.resolveRange("personalizado", HOY.minusYears(9), HOY, "week", HOY, null);
++        assertThat(r2.granularidad()).isEqualTo("month");
++    }
++
++    @Test
++    void agrupaPorSemanaDesdeElLunesYPorMesConEtiquetaAAAAMM() {
++        assertThat(SalesChartsCalculator.buckets(LocalDate.of(2026, 11, 19), LocalDate.of(2026, 11, 30), "week"))
++                .containsExactly(LocalDate.of(2026, 11, 16), LocalDate.of(2026, 11, 23), LocalDate.of(2026, 11, 30));
++        assertThat(SalesChartsCalculator.label(LocalDate.of(2026, 11, 1), "month")).isEqualTo("2026-11");
++    }
++
++    // ------------------------------------------------------------ indicadores y tendencia
++
++    @Test
++    void indicadoresCuentanPedidosDistintosYComparanConElPeriodoAnterior() {
++        Map<String, Object> out = run("7d", null);
++        // Actual: A(84000) B(10000) C(45000) D(35000) E(32000) = 206000; 5 pedidos; 8 unidades
++        assertThat(kpi(out, "ingresos").get("actual")).isEqualTo(206000.0);
++        assertThat(kpi(out, "pedidos").get("actual")).isEqualTo(5.0);
++        assertThat(kpi(out, "unidades").get("actual")).isEqualTo(8.0);
++        assertThat(kpi(out, "ticketPromedio").get("actual")).isEqualTo(41200.0);
++        // Anterior: F(32000) G(30000) = 62000 -> +232,3 %
++        assertThat(kpi(out, "ingresos").get("anterior")).isEqualTo(62000.0);
++        assertThat(kpi(out, "ingresos").get("cambioPct")).isEqualTo(232.3);
++        assertThat(kpi(out, "pedidos").get("cambioPct")).isEqualTo(150.0);
++    }
++
++    @Test
++    void enTodoNoHayComparacion() {
++        Map<String, Object> out = run("todo", null);
++        assertThat(kpi(out, "ingresos").get("anterior")).isNull();
++        assertThat(kpi(out, "ingresos").get("cambioPct")).isNull();
++        assertThat(((Map<String, Object>) out.get("trend")).get("ingresosAnterior")).isNull();
++        assertThat(kpi(out, "ingresos").get("actual")).isEqualTo(206000.0 + 62000 + 160000);
++    }
++
++    @Test
++    void laTendenciaSumaLoMismoQueLosIndicadoresYAlineaElPeriodoAnterior() {
++        Map<String, Object> out = run("7d", null);
++        Map<String, Object> trend = (Map<String, Object>) out.get("trend");
++        List<String> labels = (List<String>) trend.get("labels");
++        List<Double> ingresos = (List<Double>) trend.get("ingresos");
++        List<Double> pedidos = (List<Double>) trend.get("pedidos");
++        assertThat(labels).hasSize(7).startsWith("2026-11-13").endsWith("2026-11-19");
++        assertThat(ingresos.stream().mapToDouble(Double::doubleValue).sum()).isEqualTo(206000.0);
++        assertThat(pedidos.stream().mapToDouble(Double::doubleValue).sum()).isEqualTo(5.0);
++        assertThat(ingresos.get(labels.indexOf("2026-11-18"))).isEqualTo(84000.0);
++        List<Double> anterior = (List<Double>) trend.get("ingresosAnterior");
++        assertThat(anterior).hasSize(7);
++        assertThat(anterior.get(4)).isEqualTo(32000.0); // 10 nov = posición 4 del periodo 6-12
++        assertThat(anterior.get(5)).isEqualTo(30000.0);
++    }
++
++    // ------------------------------------------------------------ productos
++
++    @Test
++    void rankingIncluyeProductosSinVentasRetiradosYAsociaPorNombre() {
++        List<Map<String, Object>> products = (List<Map<String, Object>>) run("7d", null).get("products");
++        assertThat(products).extracting(p -> p.get("nombre"))
++                .containsExactly("Pescado frito", "Gusanito", "Mojarra (retirada)", "Limonada de coco", "Coca-Cola");
++        Map<String, Object> pescado = products.get(0);
++        assertThat(pescado.get("ingresos")).isEqualTo(96000.0); // A + E (asociado por nombre)
++        assertThat(pescado.get("unidades")).isEqualTo(3.0);
++        assertThat(pescado.get("pedidos")).isEqualTo(2);
++        assertThat(pescado.get("ticketPromedio")).isEqualTo(48000.0);
++        assertThat(pescado.get("frecuenciaPct")).isEqualTo(40.0);
++        assertThat(pescado.get("stock")).isEqualTo(24.0);
++        assertThat((List<Double>) pescado.get("serieIngresos")).hasSize(7);
++        Map<String, Object> retirado = products.get(2);
++        assertThat(retirado.get("activo")).isEqualTo(false);
++        assertThat(retirado.get("stock")).isNull();
++        Map<String, Object> coca = products.get(4);
++        assertThat(coca.get("unidades")).isEqualTo(0.0);
++        assertThat(coca.get("frecuenciaPct")).isEqualTo(0.0);
++    }
++
++    @Test
++    void elFiltroDeCategoriaAfectaIndicadoresYProductosPeroNoLaMezclaDeCategorias() {
++        Map<String, Object> out = run("7d", 2);
++        assertThat(kpi(out, "ingresos").get("actual")).isEqualTo(30000.0);
++        assertThat(kpi(out, "pedidos").get("actual")).isEqualTo(2.0);
++        List<Map<String, Object>> products = (List<Map<String, Object>>) out.get("products");
++        assertThat(products).extracting(p -> p.get("nombre")).containsExactly("Limonada de coco", "Coca-Cola");
++        List<Map<String, Object>> mix = (List<Map<String, Object>>) out.get("categoryMix");
++        assertThat(mix).extracting(m -> m.get("nombre")).containsExactly("Comida", "Bebida", "Servicio");
++        assertThat(mix.get(0).get("ingresos")).isEqualTo(131000.0);
++        assertThat(mix.get(1).get("ingresos")).isEqualTo(30000.0);
++        assertThat(mix.get(2).get("pedidos")).isEqualTo(1);
++        assertThatThrownBy(() -> run("7d", 9)).isInstanceOf(IllegalArgumentException.class);
++    }
++
++    // ------------------------------------------------------------ mapa de calor
++
++    @Test
++    void mapaDeCalorCuentaCadaPedidoUnaSolaVezEnSuDiaYHora() {
++        Map<String, Object> heat = (Map<String, Object>) run("7d", null).get("heatmap");
++        List<List<Double>> pedidos = (List<List<Double>>) heat.get("pedidos");
++        List<List<Double>> ingresos = (List<List<Double>>) heat.get("ingresos");
++        assertThat(pedidos).hasSize(7).allSatisfy(row -> assertThat(row).hasSize(24));
++        assertThat(pedidos.get(2).get(12)).isEqualTo(1.0);     // miércoles 18 nov, 12 h: pedido A (2 líneas)
++        assertThat(ingresos.get(2).get(12)).isEqualTo(84000.0);
++        assertThat(pedidos.get(3).get(15)).isEqualTo(1.0);     // jueves 19 nov, 15 h
++        double total = pedidos.stream().flatMap(List::stream).mapToDouble(Double::doubleValue).sum();
++        assertThat(total).isEqualTo(5.0);
++    }
++
++    @Test
++    void sinVentasDevuelveCerosSinErrores() {
++        Range r = SalesChartsCalculator.resolveRange("30d", null, null, "auto", HOY, null);
++        Map<String, Object> out = SalesChartsCalculator.compute(r, null, List.of(), CATALOGO);
++        assertThat(kpi(out, "ingresos").get("actual")).isEqualTo(0.0);
++        assertThat(kpi(out, "ticketPromedio").get("actual")).isEqualTo(0.0);
++        assertThat(kpi(out, "ingresos").get("cambioPct")).isNull();
++        assertThat((List<?>) out.get("products")).hasSize(4);
++    }
++}

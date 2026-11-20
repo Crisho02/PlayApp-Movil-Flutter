@@ -6,9 +6,9 @@ import '../core/storage/session_manager.dart';
 import '../data/models/admin_report_model.dart';
 import '../data/models/admin_user_model.dart';
 import '../data/models/admin_weather_model.dart';
-import '../data/models/occupancy_analytics_model.dart';
 import '../data/models/order_model.dart';
 import '../data/models/review_model.dart';
+import '../data/models/sales_charts_model.dart';
 
 class AdminProvider extends ChangeNotifier {
   List<OrderModel> _adminOrders = [];
@@ -25,14 +25,17 @@ class AdminProvider extends ChangeNotifier {
   bool _isPredicting = false;
   Map<String, dynamic>? _lastPredictionResult;
 
-  // Occupancy neural-network analytics state
-  OccupancyAnalytics? _occupancyAnalytics;
-  bool _isAnalyticsLoading = false;
-  String? _analyticsError;
+  // Pestaña "Gráficos": datos calculados en vivo desde la base de datos
+  SalesChartsData? _salesCharts;
+  bool _isChartsLoading = false;
+  String? _chartsError;
+  ChartsFilter _chartsFilter = const ChartsFilter();
+  int _chartsRequestId = 0;
 
-  OccupancyAnalytics? get occupancyAnalytics => _occupancyAnalytics;
-  bool get isAnalyticsLoading => _isAnalyticsLoading;
-  String? get analyticsError => _analyticsError;
+  SalesChartsData? get salesCharts => _salesCharts;
+  bool get isChartsLoading => _isChartsLoading;
+  String? get chartsError => _chartsError;
+  ChartsFilter get chartsFilter => _chartsFilter;
 
   List<OrderModel> get adminOrders => _adminOrders;
   Map<String, dynamic> get metrics => _metrics;
@@ -119,37 +122,40 @@ class AdminProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Carga las gráficas de la red neuronal. Si ya hay datos válidos no vuelve a pedirlos salvo [force].
-  Future<void> fetchOccupancyAnalytics({bool force = false}) async {
-    if (_isAnalyticsLoading) return;
-    if (_occupancyAnalytics != null && !force) return;
+  /// Carga los datos de la pestaña "Gráficos" desde la base de datos con los filtros indicados.
+  /// Mientras carga se conservan los datos anteriores; las respuestas de filtros viejos se descartan.
+  Future<void> fetchSalesCharts({ChartsFilter? filter}) async {
+    if (filter != null) _chartsFilter = filter;
     final correo = _getAdminEmail();
     if (correo == null) return;
 
-    _isAnalyticsLoading = true;
-    _analyticsError = null;
+    final requestId = ++_chartsRequestId;
+    final requested = _chartsFilter;
+    _isChartsLoading = true;
+    _chartsError = null;
     notifyListeners();
 
+    String? error;
+    SalesChartsData? parsed;
     try {
       final res = await ApiClient.get<Map<String, dynamic>>(
-        ApiEndpoints.adminPredictionAnalytics,
-        queryParameters: {'correo': correo},
+        ApiEndpoints.adminCharts,
+        queryParameters: {'correo': correo, ...requested.toQuery()},
       );
       if (res.success && res.data != null) {
-        final parsed = OccupancyAnalytics.tryParse(res.data!);
-        if (parsed != null) {
-          _occupancyAnalytics = parsed;
-        } else {
-          _analyticsError = 'El modelo devolvió datos incompletos. Intenta nuevamente.';
-        }
+        parsed = SalesChartsData.tryParse(res.data!);
+        if (parsed == null) error = 'La respuesta del servidor llegó incompleta. Intenta nuevamente.';
       } else {
-        _analyticsError = res.message ?? 'No fue posible cargar las gráficas del modelo.';
+        error = res.message ?? 'No fue posible cargar las gráficas.';
       }
     } catch (_) {
-      _analyticsError = 'No fue posible cargar las gráficas del modelo.';
+      error = 'No fue posible cargar las gráficas.';
     }
 
-    _isAnalyticsLoading = false;
+    if (requestId != _chartsRequestId) return; // llegó una petición más reciente
+    if (parsed != null) _salesCharts = parsed;
+    _chartsError = error;
+    _isChartsLoading = false;
     notifyListeners();
   }
 

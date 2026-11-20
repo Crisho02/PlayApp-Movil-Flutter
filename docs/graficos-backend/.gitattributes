@@ -1,0 +1,2 @@
+# El parche debe conservar sus saltos de línea exactos (LF) para aplicarse sin errores.
+*.patch -text
